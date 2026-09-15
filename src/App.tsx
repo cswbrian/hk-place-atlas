@@ -1,18 +1,86 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { LotSnapshot, MapOverlay, Place, PlaceGeometry, Relation } from './domain/types'
-import { addLot, combineLotGeometry, removeLot } from './domain/lots'
-import { primaryName } from './domain/dates'
+import type {
+  AtlasRecord,
+  BuildingSnapshot,
+  LotSnapshot,
+  MapOverlay,
+  Place,
+  PlaceGeometry,
+  Relation,
+} from './domain/types'
+import {
+  matchBdbiar,
+  parseBdbiarCsv,
+  placesFromBdbiar,
+  mergeBdbiarPlaces,
+  findBdbiarPlaceForBuilding,
+  claimBuildingOntoPlace,
+  placeBdbiarIds,
+  retargetPlaceId,
+  type BdbiarRecord,
+} from './domain/bdbiar'
+import { mergeCommonsIngests, type CommonsIngest } from './domain/commons'
+import { mergePlaceIngests, type PlaceIngest } from './domain/ingest'
+import { applyMapPick, type LocationDraft, type MapPick } from './domain/mapPick'
+import { placeByBuildingId, placeGeometry, removeBuilding, removeLot } from './domain/lots'
+import { bilingualNames } from './domain/dates'
+import { querySite, placeInBounds, type SiteQueryResult } from './domain/querySite'
+import { compareSiteOrder, siteCluster } from './domain/site'
 import { createLocalStore } from './storage/localStore'
 import type { PlaceStore } from './storage/PlaceStore'
+import { normalizeImages, normalizeSources } from './domain/links'
 import { EntityForm, draftFromPlace, emptyDraft, type Draft } from './ui/EntityForm'
 import { MapView, MIN_LOT_ZOOM } from './ui/MapView'
+import { siteMapLayers } from './ui/siteMapLayers'
 import { OverlayPanel } from './ui/OverlayPanel'
 import { PlaceDetail } from './ui/PlaceDetail'
+import { SitePanel } from './ui/SitePanel'
+import {
+  RecordForm,
+  emptyRecordDraft,
+  recordFromDraft,
+  type RecordDraft,
+} from './ui/RecordForm'
+import { YearSlider } from './ui/YearSlider'
+import { buildingVisibleInYear, maxYear, MIN_YEAR, placeStandingInYear } from './domain/yearView'
+import { fetchBuildingsInWgsBounds } from './ui/buildings/buildingApi'
 import { fetchLotByNumber, fetchLotsInWgsBounds } from './ui/lots/lotApi'
 import { newId, nowIso } from './ui/ids'
-import JSZip from 'jszip'
 
-type MapMode = 'browse' | 'point' | 'draw'
+type MapMode = 'browse' | 'record-point'
+type ViewBounds = { west: number; south: number; east: number; north: number; zoom: number }
+
+const commonsIngests = Object.values(
+  import.meta.glob('../data/commons/*.json', { eager: true, import: 'default' }),
+) as CommonsIngest[]
+
+const placeIngests = Object.values(
+  import.meta.glob('../data/ingest/*.json', { eager: true, import: 'default' }),
+) as PlaceIngest[]
+
+async function persistSeedIngests(store: PlaceStore) {
+  const existing = {
+    places: await store.listPlaces(),
+    records: await store.listRecords(),
+    relations: await store.listRelations(),
+  }
+  const merged = mergePlaceIngests(
+    mergeCommonsIngests(existing, commonsIngests),
+    placeIngests,
+  )
+  const placesById = new Map(existing.places.map((place) => [place.id, place]))
+  for (const place of merged.places) {
+    if (placesById.get(place.id) !== place) await store.savePlace(place)
+  }
+  const recordsById = new Map(existing.records.map((record) => [record.id, record]))
+  for (const record of merged.records) {
+    if (recordsById.get(record.id) !== record) await store.saveRecord(record)
+  }
+  const relationsById = new Map(existing.relations.map((relation) => [relation.id, relation]))
+  for (const relation of merged.relations) {
+    if (relationsById.get(relation.id) !== relation) await store.saveRelation(relation)
+  }
+}
 
 function parseYear(value: string) {
   const year = Number(value)
@@ -24,8 +92,7 @@ function parsePart(value: string) {
   return Number.isInteger(n) && n > 0 ? n : undefined
 }
 
-function draftGeometry(draft: Draft): PlaceGeometry | null {
-  if (draft.lots.length > 0) return combineLotGeometry(draft.lots)
+function draftFallbackGeometry(draft: Draft): PlaceGeometry | null {
   if (draft.polygon && draft.polygon.length >= 3) {
     const ring = draft.polygon.map(([lng, lat]) => [lng, lat])
     const first = ring[0]
@@ -37,27 +104,54 @@ function draftGeometry(draft: Draft): PlaceGeometry | null {
   return null
 }
 
+function draftGeometry(draft: Draft): PlaceGeometry | null {
+  return placeGeometry(draft.buildings ?? [], draft.lots ?? [], draftFallbackGeometry(draft))
+}
+
+function namesEmpty(draft: Draft): boolean {
+  return !draft.names.some((name) => name.text.trim())
+}
+
+function prefillBuildingNames(draft: Draft, building: BuildingSnapshot): Draft['names'] {
+  if (!namesEmpty(draft)) return draft.names
+  const names = [...draft.names]
+  if (building.nameEn) names[0] = { lang: 'en', text: building.nameEn, primary: true }
+  if (building.nameZh) names[1] = { lang: 'zh-Hant', text: building.nameZh }
+  return names
+}
+
+const NOW_YEAR = maxYear()
+const EMPTY_IDS: string[] = []
+
 export default function App() {
   const [store, setStore] = useState<PlaceStore | null>(null)
+  const [viewYear, setViewYear] = useState(NOW_YEAR)
   const [places, setPlaces] = useState<Place[]>([])
   const [relations, setRelations] = useState<Relation[]>([])
+  const [records, setRecords] = useState<AtlasRecord[]>([])
   const [overlays, setOverlays] = useState<MapOverlay[]>([])
   const [overlayUrls, setOverlayUrls] = useState<Record<string, string>>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [site, setSite] = useState<SiteQueryResult | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [recordDraft, setRecordDraft] = useState<RecordDraft | null>(null)
   const [mode, setMode] = useState<MapMode>('browse')
   const [visibleLots, setVisibleLots] = useState<LotSnapshot[]>([])
+  const [rawBuildings, setRawBuildings] = useState<BuildingSnapshot[]>([])
+  const [viewBounds, setViewBounds] = useState<ViewBounds | null>(null)
   const [lotQuery, setLotQuery] = useState('')
   const [lotStatus, setLotStatus] = useState('')
-  const [zoomHint, setZoomHint] = useState('Zoom in to load lot tiles')
+  const [zoomHint, setZoomHint] = useState('Zoom in to load buildings and parcels')
   const [query, setQuery] = useState('')
   const [aligningId, setAligningId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showOverlays, setShowOverlays] = useState(false)
+  const [bdbiar, setBdbiar] = useState<Map<string, BdbiarRecord>>(new Map())
 
   const reload = useCallback(async (next: PlaceStore) => {
     setPlaces(await next.listPlaces())
     setRelations(await next.listRelations())
+    setRecords(await next.listRecords())
     const list = await next.listOverlays()
     setOverlays(list)
     const urls: Record<string, string> = {}
@@ -70,6 +164,56 @@ export default function App() {
       return urls
     })
   }, [])
+
+  useEffect(() => {
+    if (!store) return
+    let cancelled = false
+    fetch('/BDBIAR_Central_and_Western.csv')
+      .then((response) => {
+        if (!response.ok) throw new Error('Could not load building age records')
+        return response.text()
+      })
+      .then(async (text) => {
+        if (cancelled) return
+        const parsed = parseBdbiarCsv(text)
+        setBdbiar(parsed)
+        const seeded = placesFromBdbiar(parsed)
+        const existing = await store.listPlaces()
+        const { places: merged, removedIds } = mergeBdbiarPlaces(existing, seeded)
+        const existingById = new Map(existing.map((place) => [place.id, place]))
+        for (const place of merged) {
+          if (existingById.get(place.id) !== place) await store.savePlace(place)
+        }
+        if (removedIds.length > 0) {
+          let relations = await store.listRelations()
+          let records = await store.listRecords()
+          for (const removedId of removedIds) {
+            const into = merged.find((place) =>
+              placeBdbiarIds(place).some((id) => removedId === `bdbiar-${id}`),
+            )
+            if (into) {
+              const next = retargetPlaceId(removedId, into.id, { relations, records })
+              relations = next.relations
+              records = next.records
+            }
+          }
+          for (const relation of relations) await store.saveRelation(relation)
+          for (const record of records) await store.saveRecord(record)
+          for (const removedId of removedIds) await store.removePlace(removedId)
+        }
+      })
+      .catch(() => {
+        /* Map still works without BDBIAR seed. */
+      })
+      .then(async () => {
+        if (cancelled) return
+        await persistSeedIngests(store)
+        if (!cancelled) await reload(store)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [store, reload])
 
   useEffect(() => {
     let cancelled = false
@@ -86,24 +230,125 @@ export default function App() {
   }, [reload])
 
   const filtered = useMemo(() => {
+    const standing = places.filter((item) => placeStandingInYear(item, viewYear, NOW_YEAR))
     const q = query.trim().toLowerCase()
-    if (!q) return places
-    return places.filter((place) =>
-      place.names.some((name) => name.text.toLowerCase().includes(q))
-      || (place.lots ?? []).some((lot) => lot.number.toLowerCase().includes(q)),
+    if (!q) return standing
+    return standing.filter((item) =>
+      item.names.some((name) => name.text.toLowerCase().includes(q))
+      || (item.lots ?? []).some((lot) => lot.number.toLowerCase().includes(q)),
     )
-  }, [places, query])
+  }, [places, query, viewYear])
+
+  const mapPlaces = useMemo(() => {
+    if (!viewBounds || viewBounds.zoom < MIN_LOT_ZOOM) {
+      return filtered.filter((place) => !place.id.startsWith('bdbiar-') || (place.buildings?.length ?? 0) > 0)
+    }
+    return filtered.filter((place) => placeInBounds(place.geometry, viewBounds))
+  }, [filtered, viewBounds])
 
   const selected = places.find((place) => place.id === selectedId) ?? null
-  const overlayViews = overlays
-    .filter((overlay) => overlayUrls[overlay.id])
-    .map((overlay) => ({ ...overlay, url: overlayUrls[overlay.id] }))
+  const overlayViews = useMemo(
+    () =>
+      overlays
+        .filter((overlay) => overlayUrls[overlay.id])
+        .map((overlay) => ({ ...overlay, url: overlayUrls[overlay.id] })),
+    [overlays, overlayUrls],
+  )
+  const attachedLotNumbers = useMemo(
+    () => draft?.lots.map((lot) => lot.number) ?? EMPTY_IDS,
+    [draft],
+  )
+  const claimedBuildingIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const place of places) {
+      for (const building of place.buildings ?? []) ids.add(building.buildingId)
+    }
+    for (const building of draft?.buildings ?? []) ids.add(building.buildingId)
+    return [...ids]
+  }, [places, draft])
+  const visibleBuildings = useMemo(
+    () =>
+      rawBuildings
+        .map((building) => enrichBuilding(building, bdbiar))
+        .filter((building) => buildingVisibleInYear(building, viewYear, NOW_YEAR)),
+    [rawBuildings, bdbiar, viewYear],
+  )
+  const editingPlace = Boolean(draft)
+  /** Idle: clean basemap. Site open: that site’s polygons + hit CSDI/lots. Edit: full layers. */
+  const layers = siteMapLayers({
+    editing: editingPlace,
+    site,
+    places,
+    editPlaces: mapPlaces,
+    allBuildings: visibleBuildings,
+    allLots: visibleLots,
+    selectedId,
+  })
+  const renderedPlaces = layers.places
+  const focusPlaceIds = layers.focusPlaceIds
+  const mapLots = layers.lots
+  const mapBuildings = layers.buildings
+
+  function openSiteAt(lng: number, lat: number) {
+    const next = querySite({
+      lng,
+      lat,
+      buildings: visibleBuildings,
+      lots: visibleLots,
+      places,
+      records,
+    })
+    setSite(next)
+    setSelectedId(null)
+    setDraft(null)
+    setRecordDraft(null)
+  }
+
+  function openSiteFromPlace(place: Place) {
+    if (!place.geometry) {
+      setSelectedId(place.id)
+      setSite(null)
+      setDraft(null)
+      setRecordDraft(null)
+      return
+    }
+    const [lng, lat] = placeCentroid(place.geometry)
+    const clustered = siteCluster(places, place.id, {
+      nearbyPoints: place.geometry.type === 'Point',
+    })
+    const hit = querySite({
+      lng,
+      lat,
+      buildings: visibleBuildings,
+      lots: visibleLots,
+      places,
+      records,
+    })
+    const placeIds = [...new Set([...clustered, ...hit.placeIds.filter((id) => {
+      const candidate = places.find((item) => item.id === id)
+      if (!candidate) return false
+      // Keep map-hit polygons/lots; drop stray nearby BDBIAR pins not in the cluster.
+      if (clustered.includes(id)) return true
+      return (candidate.lots ?? []).length > 0 || (candidate.buildings ?? []).length > 0 || (candidate.geometry != null && candidate.geometry.type !== 'Point')
+    })])]
+    setSite({
+      ...hit,
+      placeIds: placeIds
+        .map((id) => places.find((item) => item.id === id))
+        .filter((item): item is Place => Boolean(item))
+        .sort(compareSiteOrder)
+        .map((item) => item.id),
+    })
+    setSelectedId(null)
+    setDraft(null)
+    setRecordDraft(null)
+  }
 
   async function persistPlace(nextDraft: Draft) {
     if (!store) return
     const geometry = draftGeometry(nextDraft)
     if (!geometry) {
-      setError('Add at least one lot, a point, or a drawn footprint.')
+      setError('Click a building or parcel, or a pin on the map.')
       return
     }
     const year = parseYear(nextDraft.builtYear)
@@ -133,9 +378,11 @@ export default function App() {
         : null,
       geometry,
       lots: nextDraft.lots.length ? nextDraft.lots : undefined,
+      buildings: (nextDraft.buildings ?? []).length ? nextDraft.buildings : undefined,
       locationLabel: nextDraft.locationLabel || undefined,
       notes: nextDraft.notes,
-      sources: nextDraft.sources.filter((source) => source.label.trim()),
+      sources: normalizeSources(nextDraft.sources),
+      images: normalizeImages(nextDraft.images),
       tags: nextDraft.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
       customFields: nextDraft.customFields.filter((field) => field.key.trim()),
       createdAt: existing?.createdAt ?? now,
@@ -148,17 +395,9 @@ export default function App() {
     await store.savePlace(place)
     const current = await store.listRelations()
     for (const relation of current) {
-      if (relation.fromId === id && (relation.type === 'site_successor' || relation.type === 'institution_successor')) {
+      if (relation.fromId === id && relation.type === 'institution_successor') {
         await store.removeRelation(relation.id)
       }
-    }
-    if (nextDraft.siteSuccessorId) {
-      await store.saveRelation({
-        id: newId(),
-        fromId: id,
-        toId: nextDraft.siteSuccessorId,
-        type: 'site_successor',
-      })
     }
     if (nextDraft.institutionSuccessorId) {
       await store.saveRelation({
@@ -171,17 +410,120 @@ export default function App() {
     await reload(store)
     setDraft(null)
     setMode('browse')
-    setSelectedId(id)
     setError(null)
+    if (site) {
+      setSelectedId(null)
+      setSite({
+        ...site,
+        placeIds: site.placeIds.includes(id) ? site.placeIds : [...site.placeIds, id],
+      })
+    } else {
+      setSelectedId(id)
+    }
   }
 
-  function attachLot(lot: LotSnapshot) {
-    setDraft((current) => {
-      const base = current ?? emptyDraft()
-      return { ...base, lots: addLot(base.lots, lot), point: null, polygon: null }
-    })
+  async function deleteDraftPlace(nextDraft: Draft) {
+    if (!store || !nextDraft.id) return
+    await store.removePlace(nextDraft.id)
+    await reload(store)
+    setDraft(null)
     setMode('browse')
     setSelectedId(null)
+    if (site) {
+      setSite({
+        ...site,
+        placeIds: site.placeIds.filter((placeId) => placeId !== nextDraft.id),
+      })
+    }
+  }
+
+  function applyPickToDraft(current: Draft, pick: MapPick): Draft {
+    const loc = applyMapPick(
+      locationOf(current),
+      pick,
+      claimedByOtherPlaces(places, current.id),
+    )
+    const next = { ...current, ...loc }
+    const added = loc.buildings.find(
+      (building) => !(current.buildings ?? []).some((item) => item.buildingId === building.buildingId),
+    )
+    return added ? { ...next, names: prefillBuildingNames(next, added) } : next
+  }
+
+  async function persistRecord(nextDraft: RecordDraft) {
+    if (!store) return
+    const urls = normalizeSources(nextDraft.urls).filter((item) => item.url)
+    if (!urls.length && !nextDraft.notes.trim() && !nextDraft.title.trim()) {
+      setError('Paste a link, title, or notes for the record.')
+      return
+    }
+    if (!nextDraft.point && nextDraft.placeIds.length === 0) {
+      setError('Drop a pin or link at least one place.')
+      return
+    }
+    const id = nextDraft.id ?? newId()
+    const now = nowIso()
+    const existing = records.find((record) => record.id === id) ?? null
+    const record = recordFromDraft(nextDraft, existing, now, id, urls)
+    await store.saveRecord(record)
+    const nextRecords = await store.listRecords()
+    await reload(store)
+    setRecordDraft(null)
+    setMode('browse')
+    setError(null)
+    if (record.geometry?.type === 'Point') {
+      const [lng, lat] = record.geometry.coordinates
+      const next = querySite({
+        lng,
+        lat,
+        buildings: visibleBuildings,
+        lots: visibleLots,
+        places,
+        records: nextRecords,
+      })
+      // Ensure the just-saved record appears even if place set is briefly stale.
+      if (!next.recordIds.includes(record.id)) next.recordIds = [...next.recordIds, record.id]
+      setSite(next)
+      setSelectedId(null)
+    }
+  }
+
+  function attachLot(lot: LotSnapshot, lng?: number, lat?: number) {
+    const clickLng = lng ?? lot.geometry.coordinates[0]![0]![0]
+    const clickLat = lat ?? lot.geometry.coordinates[0]![0]![1]
+    if (!draft) {
+      openSiteAt(clickLng, clickLat)
+      return
+    }
+    setDraft(applyPickToDraft(draft, { lng: clickLng, lat: clickLat, lots: [lot] }))
+  }
+
+  function clickBuilding(building: BuildingSnapshot, lng: number, lat: number) {
+    if (mode !== 'browse') return
+    if (draft) {
+      setDraft(applyPickToDraft(draft, { lng, lat, buildings: [building] }))
+      return
+    }
+    openSiteAt(lng, lat)
+  }
+
+  async function claimVisibleBuildings(buildings: BuildingSnapshot[]) {
+    if (!store || buildings.length === 0) return
+    const current = await store.listPlaces()
+    let changed = false
+    const nextPlaces = [...current]
+    for (const building of buildings) {
+      if (placeByBuildingId(nextPlaces, building.buildingId)) continue
+      const match = findBdbiarPlaceForBuilding(nextPlaces, building, matchBdbiar(building, bdbiar))
+      if (!match) continue
+      if ((match.buildings ?? []).some((item) => item.buildingId === building.buildingId)) continue
+      const claimed = claimBuildingOntoPlace(match, building)
+      const index = nextPlaces.findIndex((place) => place.id === match.id)
+      if (index >= 0) nextPlaces[index] = claimed
+      await store.savePlace(claimed)
+      changed = true
+    }
+    if (changed) await reload(store)
   }
 
   async function onSearchLot() {
@@ -189,7 +531,7 @@ export default function App() {
     try {
       const lot = await fetchLotByNumber(lotQuery)
       if (!lot) {
-        setLotStatus('No lot found')
+        setLotStatus('No parcel found')
         return
       }
       attachLot(lot)
@@ -199,39 +541,46 @@ export default function App() {
     }
   }
 
-  async function onViewChange(view: { west: number; south: number; east: number; north: number; zoom: number }) {
+  async function onViewChange(view: ViewBounds) {
+    if (sameBounds(viewBounds, view)) return
+    setViewBounds(view)
     if (view.zoom < MIN_LOT_ZOOM) {
       setVisibleLots([])
-      setZoomHint('Zoom in to load lot tiles')
+      setRawBuildings([])
+      setZoomHint('Zoom in to load buildings and parcels')
       return
     }
-    setZoomHint('Click a lot to start or add to this place')
-    try {
-      const lots = await fetchLotsInWgsBounds(view.west, view.south, view.east, view.north)
-      setVisibleLots(lots)
-    } catch (err) {
-      setZoomHint(err instanceof Error ? err.message : 'Could not load lots')
+    setZoomHint('Click the map for site history')
+    const [parcels, buildings] = await Promise.allSettled([
+      fetchLotsInWgsBounds(view.west, view.south, view.east, view.north),
+      fetchBuildingsInWgsBounds(view.west, view.south, view.east, view.north),
+    ])
+    if (parcels.status === 'fulfilled') setVisibleLots(parcels.value)
+    else setVisibleLots([])
+    if (buildings.status === 'fulfilled') {
+      setRawBuildings(buildings.value)
+      void claimVisibleBuildings(buildings.value)
+    } else setRawBuildings([])
+    if (parcels.status === 'rejected' && buildings.status === 'rejected') {
+      const err = parcels.reason instanceof Error ? parcels.reason : new Error('Could not load map features')
+      setZoomHint(err.message)
     }
   }
 
   function onMapClick(lng: number, lat: number) {
-    if (mode === 'point') {
-      setDraft((current) => ({
-        ...(current ?? emptyDraft()),
+    if (mode === 'record-point') {
+      setRecordDraft((current) => ({
+        ...(current ?? emptyRecordDraft()),
         point: [lng, lat],
-        lots: [],
-        polygon: null,
       }))
       setMode('browse')
       return
     }
-    if (mode === 'draw') {
-      setDraft((current) => {
-        const base = current ?? emptyDraft()
-        const polygon = [...(base.polygon ?? []), [lng, lat] as [number, number]]
-        return { ...base, polygon, lots: [], point: null }
-      })
+    if (draft) {
+      setDraft(applyPickToDraft(draft, { lng, lat }))
+      return
     }
+    openSiteAt(lng, lat)
   }
 
   async function onUploadOverlay(file: File) {
@@ -263,59 +612,35 @@ export default function App() {
     setShowOverlays(true)
   }
 
-  async function exportDataset() {
-    if (!store) return
-    const data = await store.exportAll()
-    const hasImages = data.overlays.length > 0
-    if (!hasImages) {
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-      downloadBlob(blob, 'hk-place-atlas.json')
-      return
-    }
-    const zip = new JSZip()
-    zip.file('dataset.json', JSON.stringify(data, null, 2))
-    for (const overlay of data.overlays) {
-      const blob = await store.getOverlayImage(overlay.id)
-      if (blob) {
-        const ext = overlay.mimeType.includes('png') ? 'png' : 'jpg'
-        zip.file(`maps/${overlay.id}.${ext}`, blob)
-      }
-    }
-    downloadBlob(await zip.generateAsync({ type: 'blob' }), 'hk-place-atlas.zip')
-  }
-
-  async function importDataset(file: File) {
-    if (!store) return
-    if (file.name.endsWith('.zip')) {
-      const zip = await JSZip.loadAsync(file)
-      const json = await zip.file('dataset.json')?.async('string')
-      if (!json) {
-        setError('Zip is missing dataset.json')
-        return
-      }
-      const data = JSON.parse(json)
-      await store.importAll(data)
-      for (const overlay of data.overlays ?? []) {
-        const ext = overlay.mimeType?.includes('png') ? 'png' : 'jpg'
-        const entry = zip.file(`maps/${overlay.id}.${ext}`) ?? zip.file(`maps/${overlay.id}.jpg`)
-        if (entry) await store.putOverlayImage(overlay.id, await entry.async('blob'))
-      }
-    } else {
-      await store.importAll(JSON.parse(await file.text()))
-    }
-    await reload(store)
+  function startRecord(point?: [number, number] | null, placeIds: string[] = []) {
+    setRecordDraft(emptyRecordDraft(point ?? null, placeIds))
+    setDraft(null)
+    setSelectedId(null)
+    setSite(null)
+    setMode('browse')
   }
 
   if (!store) {
     return <div className="boot">{error ?? 'Opening atlas…'}</div>
   }
 
+  const listPlaces = query.trim()
+    ? filtered.slice(0, 80)
+    : filtered.filter((place) => !place.id.startsWith('bdbiar-')).slice(0, 80)
+
   return (
     <div className="app">
+      <a className="skip-link" href="#atlas-sidebar">
+        Skip to sidebar
+      </a>
       <header className="chrome">
         <div>
           <h1>HK Place Atlas</h1>
-          <p className="muted">{zoomHint}</p>
+          <p className="muted">
+            {mode === 'record-point'
+              ? 'Click the map to drop a point. Buildings and parcels will not be selected.'
+              : zoomHint}
+          </p>
         </div>
         <div className="chrome-actions">
           <input
@@ -324,58 +649,61 @@ export default function App() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <button type="button" onClick={() => { setDraft(emptyDraft()); setSelectedId(null); setMode('browse') }}>
-            Add place
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => startRecord(site ? [site.lng, site.lat] : null, site?.placeIds ?? [])}
+          >
+            Add record
           </button>
-          <button type="button" onClick={() => setShowOverlays((value) => !value)}>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setShowOverlays((value) => !value)}
+          >
             Old maps
           </button>
-          <button type="button" onClick={exportDataset}>
-            Export
-          </button>
-          <label className="upload-inline">
-            Import
-            <input
-              type="file"
-              accept=".json,.zip"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) void importDataset(file)
-                event.target.value = ''
-              }}
-            />
-          </label>
         </div>
       </header>
 
       <div className="workspace">
-        <MapView
-          places={filtered}
-          selectedId={selectedId}
-          visibleLots={visibleLots}
-          attachedLotNumbers={draft?.lots.map((lot) => lot.number) ?? []}
-          overlays={overlayViews}
-          aligningId={aligningId}
-          drawVertices={mode === 'draw' ? (draft?.polygon ?? []) : []}
-          onSelectPlace={(id) => {
-            if (draft) return
-            setSelectedId(id)
-          }}
-          onClickLot={attachLot}
-          onMapClick={onMapClick}
-          onViewChange={(view) => void onViewChange(view)}
-          onOverlayCorners={(id, corners) => {
-            setOverlays((current) => {
-              const overlay = current.find((item) => item.id === id)
-              if (overlay) {
-                void store.saveOverlay({ ...overlay, corners, updatedAt: nowIso() })
-              }
-              return current.map((item) => item.id === id ? { ...item, corners } : item)
-            })
-          }}
-        />
+        <div className="map-stack">
+          <MapView
+            places={renderedPlaces}
+            selectedId={editingPlace ? selectedId : null}
+            focusPlaceIds={focusPlaceIds}
+            showPlacePolygons={layers.showPlacePolygons}
+            visibleLots={mapLots}
+            visibleBuildings={mapBuildings}
+            attachedLotNumbers={attachedLotNumbers}
+            attachedBuildingIds={claimedBuildingIds}
+            overlays={overlayViews}
+            aligningId={aligningId}
+            drawVertices={draft?.polygon ?? []}
+            drawing={false}
+            onSelectPlace={(_id, lng, lat) => {
+              if (draft || recordDraft) return
+              openSiteAt(lng, lat)
+            }}
+            onClickLot={attachLot}
+            onClickBuilding={clickBuilding}
+            onMapClick={onMapClick}
+            onClosePolygon={() => setMode('browse')}
+            onViewChange={(view) => void onViewChange(view)}
+            onOverlayCorners={(id, corners) => {
+              setOverlays((current) => {
+                const overlay = current.find((item) => item.id === id)
+                if (overlay) {
+                  void store.saveOverlay({ ...overlay, corners, updatedAt: nowIso() })
+                }
+                return current.map((item) => (item.id === id ? { ...item, corners } : item))
+              })
+            }}
+          />
+          <YearSlider min={MIN_YEAR} max={NOW_YEAR} value={viewYear} onChange={setViewYear} />
+        </div>
 
-        <aside className="sidebar">
+        <aside id="atlas-sidebar" className="sidebar">
           {error && <p className="error">{error}</p>}
           {showOverlays && (
             <OverlayPanel
@@ -386,7 +714,7 @@ export default function App() {
                 const overlay = overlays.find((item) => item.id === id)
                 if (!overlay) return
                 const next = { ...overlay, visible: !overlay.visible }
-                setOverlays((current) => current.map((item) => item.id === id ? next : item))
+                setOverlays((current) => current.map((item) => (item.id === id ? next : item)))
                 void store.saveOverlay(next)
               }}
               onAlign={setAligningId}
@@ -394,7 +722,7 @@ export default function App() {
                 const overlay = overlays.find((item) => item.id === id)
                 if (!overlay) return
                 const next = { ...overlay, opacity }
-                setOverlays((current) => current.map((item) => item.id === id ? next : item))
+                setOverlays((current) => current.map((item) => (item.id === id ? next : item)))
                 void store.saveOverlay(next)
               }}
               onDelete={(id) => {
@@ -414,13 +742,28 @@ export default function App() {
               onLotQuery={setLotQuery}
               onSearchLot={() => void onSearchLot()}
               onRemoveLot={(number) => setDraft({ ...draft, lots: removeLot(draft.lots, number) })}
-              onStartPoint={() => setMode('point')}
-              onStartDraw={() => {
-                setDraft({ ...draft, polygon: [], lots: [], point: null })
-                setMode('draw')
-              }}
+              onRemoveBuilding={(buildingId) =>
+                setDraft({ ...draft, buildings: removeBuilding(draft.buildings, buildingId) })
+              }
               onSave={() => void persistPlace(draft)}
-              onCancel={() => { setDraft(null); setMode('browse') }}
+              onCancel={() => {
+                setDraft(null)
+                setMode('browse')
+                if (site) setSelectedId(null)
+              }}
+              onDelete={draft.id ? () => void deleteDraftPlace(draft) : undefined}
+            />
+          ) : recordDraft ? (
+            <RecordForm
+              draft={recordDraft}
+              places={placesForRecordForm(places, recordDraft.placeIds)}
+              onChange={setRecordDraft}
+              onStartPoint={() => setMode('record-point')}
+              onSave={() => void persistRecord(recordDraft)}
+              onCancel={() => {
+                setRecordDraft(null)
+                setMode('browse')
+              }}
             />
           ) : selected ? (
             <PlaceDetail
@@ -428,42 +771,131 @@ export default function App() {
               places={places}
               relations={relations}
               onEdit={() => setDraft(draftFromPlace(selected, relations))}
-              onDelete={() => {
-                void store.removePlace(selected.id).then(() => reload(store))
+              onSelect={setSelectedId}
+              onBack={site ? () => setSelectedId(null) : undefined}
+            />
+          ) : site ? (
+            <SitePanel
+              site={site}
+              places={places}
+              records={records}
+              onEditPlace={(place) => {
+                setDraft(draftFromPlace(place, relations))
                 setSelectedId(null)
               }}
-              onSelect={setSelectedId}
+              onSelectPlace={(id) => setSelectedId(id)}
+              onAddPlace={() => {
+                setDraft(applyPickToDraft(emptyDraft(), {
+                  lng: site.lng,
+                  lat: site.lat,
+                  buildings: site.buildings,
+                  lots: site.lots,
+                }))
+                setSelectedId(null)
+              }}
+              onAddRecord={() => startRecord([site.lng, site.lat], site.placeIds)}
+              onClose={() => setSite(null)}
             />
           ) : (
             <div className="welcome">
               <h2>Places</h2>
-              <p className="hint">Zoom into Central, click a lot, then fill in the building. Seed data is the GPO chain.</p>
-              <ul className="place-list">
-                {filtered.map((place) => (
-                  <li key={place.id}>
-                    <button type="button" className="linkish" onClick={() => setSelectedId(place.id)}>
-                      {primaryName(place)}
-                    </button>
-                  </li>
-                ))}
+              <p className="hint">
+                Zoom into Central and Western, then click the map for that site's timeline. Idle view is a clean basemap; click a site to see its polygons and the footprint under the click.
+              </p>
+              <ul className="catalog catalog-places">
+                {listPlaces.map((place) => {
+                  const { en, zh } = bilingualNames(place)
+                  const year = place.built ?? place.demolished
+                  return (
+                    <li key={place.id} className="catalog-row">
+                      <div className="catalog-name">
+                        <button
+                          type="button"
+                          className="linkish"
+                          onClick={() => openSiteFromPlace(place)}
+                        >
+                          {en}
+                        </button>
+                        {zh && <p className="zh">{zh}</p>}
+                      </div>
+                      <span className="catalog-year">
+                        {year ? (year.circa ? `c. ${year.year}` : year.year) : '—'}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}
-          {mode === 'draw' && (
-            <p className="hint">Click the map to add vertices. Save when the outline is enough. Double-add is fine.</p>
+          {mode === 'record-point' && (
+            <p className="hint">Click the map to drop a point.</p>
           )}
-          {mode === 'point' && <p className="hint">Click the map to drop a point.</p>}
         </aside>
       </div>
     </div>
   )
 }
 
-function downloadBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  a.click()
-  URL.revokeObjectURL(url)
+function placesForRecordForm(places: Place[], placeIds: string[]): Place[] {
+  const byId = new Map(places.map((place) => [place.id, place]))
+  const linked = placeIds
+    .map((id) => byId.get(id))
+    .filter((place): place is Place => Boolean(place))
+  const extras = places
+    .filter((place) => !placeIds.includes(place.id))
+    .filter((place) => !place.id.startsWith('bdbiar-') || (place.buildings?.length ?? 0) > 0)
+    .slice(0, 150)
+  return [...linked, ...extras]
+}
+
+function locationOf(draft: Draft): LocationDraft {
+  return {
+    buildings: draft.buildings ?? [],
+    lots: draft.lots ?? [],
+    point: draft.point,
+    polygon: draft.polygon,
+  }
+}
+
+function claimedByOtherPlaces(places: Place[], exceptId?: string): Set<string> {
+  const ids = new Set<string>()
+  for (const place of places) {
+    if (place.id === exceptId) continue
+    for (const building of place.buildings ?? []) ids.add(building.buildingId)
+  }
+  return ids
+}
+
+function placeCentroid(geometry: PlaceGeometry): [number, number] {
+  if (geometry.type === 'Point') return [geometry.coordinates[0], geometry.coordinates[1]]
+  if (geometry.type === 'Polygon') {
+    const ring = geometry.coordinates[0] ?? []
+    if (!ring.length) return [0, 0]
+    const sum = ring.reduce<[number, number]>((acc, pos) => [acc[0] + pos[0], acc[1] + pos[1]], [0, 0])
+    return [sum[0] / ring.length, sum[1] / ring.length]
+  }
+  const ring = geometry.coordinates[0]?.[0] ?? []
+  if (!ring.length) return [0, 0]
+  const sum = ring.reduce<[number, number]>((acc, pos) => [acc[0] + pos[0], acc[1] + pos[1]], [0, 0])
+  return [sum[0] / ring.length, sum[1] / ring.length]
+}
+
+function sameBounds(a: ViewBounds | null, b: ViewBounds): boolean {
+  if (!a) return false
+  return a.zoom === b.zoom
+    && a.west === b.west
+    && a.south === b.south
+    && a.east === b.east
+    && a.north === b.north
+}
+
+function enrichBuilding(building: BuildingSnapshot, records: Map<string, BdbiarRecord>): BuildingSnapshot {
+  const record = matchBdbiar(building, records)
+  if (!record) return building
+  return {
+    ...building,
+    nameEn: building.nameEn || record.addressEn || undefined,
+    nameZh: building.nameZh || record.addressZh || undefined,
+    occupiedYear: record.occupiedAt?.year,
+  }
 }

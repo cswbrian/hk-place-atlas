@@ -2,10 +2,11 @@ import type { Place, Relation } from '../domain/types'
 
 const now = '2026-01-01T00:00:00.000Z'
 
-function place(partial: Omit<Place, 'createdAt' | 'updatedAt' | 'notes' | 'sources' | 'tags' | 'customFields'> & Partial<Place>): Place {
+function place(partial: Omit<Place, 'createdAt' | 'updatedAt' | 'notes' | 'sources' | 'images' | 'tags' | 'customFields'> & Partial<Place>): Place {
   return {
     notes: '',
     sources: [],
+    images: [],
     tags: [],
     customFields: [],
     createdAt: now,
@@ -93,11 +94,5 @@ export const seedRelations: Relation[] = [
     fromId: 'gpo-connaught',
     toId: 'gpo-current',
     type: 'institution_successor',
-  },
-  {
-    id: 'rel-site-connaught-wwh',
-    fromId: 'gpo-connaught',
-    toId: 'world-wide-house',
-    type: 'site_successor',
   },
 ]

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "commons:fetch": "node --experimental-strip-types scripts/fetch-commons-category.ts",
+    "ingest:fetch": "node --experimental-strip-types scripts/fetch-place-source.ts",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -12,10 +14,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "idb": "^8.0.3",
-    "jszip": "^3.10.2",
     "leaflet": "^1.9.4",
     "leaflet-imageoverlay-rotated": "^0.2.1",
+    "maplibre-gl": "^6.9.0",
     "proj4": "^2.22.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

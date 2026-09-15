@@ -1,4 +1,4 @@
-import type { DatasetEnvelope, MapOverlay, Place, Relation } from '../domain/types'
+import type { AtlasRecord, MapOverlay, Place, Relation } from '../domain/types'
 
 export type PlaceStore = {
   listPlaces(): Promise<Place[]>
@@ -13,6 +13,10 @@ export type PlaceStore = {
   removeOverlay(id: string): Promise<void>
   putOverlayImage(id: string, blob: Blob): Promise<void>
   getOverlayImage(id: string): Promise<Blob | null>
-  exportAll(): Promise<DatasetEnvelope>
-  importAll(data: DatasetEnvelope): Promise<void>
+  listRecords(): Promise<AtlasRecord[]>
+  getRecord(id: string): Promise<AtlasRecord | null>
+  saveRecord(record: AtlasRecord): Promise<AtlasRecord>
+  removeRecord(id: string): Promise<void>
+  putRecordImage(id: string, blob: Blob): Promise<void>
+  getRecordImage(id: string): Promise<Blob | null>
 }

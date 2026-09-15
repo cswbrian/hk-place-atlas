@@ -16,6 +16,7 @@ function firstRing(geometry: PlaceGeometry): Position[] {
   return geometry.coordinates[0]?.[0] ?? []
 }
 
-export function placeLngLat(place: Place): [number, number] {
+export function placeLngLat(place: Place): [number, number] | null {
+  if (!place.geometry) return null
   return geometryCentroid(place.geometry)
 }
