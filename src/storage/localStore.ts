@@ -1,9 +1,9 @@
 import { openDB, type IDBPDatabase } from 'idb'
-import type { DatasetEnvelope, MapOverlay, Place, Relation } from '../domain/types'
+import type { AtlasRecord, MapOverlay, Place, Relation } from '../domain/types'
 import type { PlaceStore } from './PlaceStore'
 import { seedPlaces, seedRelations } from './seed'
 
-const DB_NAME = 'hk-place-atlas'
+const DB_NAME = 'hk-place-atlas-v2'
 const DB_VERSION = 1
 
 type AtlasDB = {
@@ -23,6 +23,14 @@ type AtlasDB = {
     key: string
     value: Blob
   }
+  records: {
+    key: string
+    value: AtlasRecord
+  }
+  recordImages: {
+    key: string
+    value: Blob
+  }
   meta: {
     key: string
     value: { seeded?: boolean }
@@ -36,6 +44,8 @@ async function openAtlasDB(): Promise<IDBPDatabase<AtlasDB>> {
       if (!db.objectStoreNames.contains('relations')) db.createObjectStore('relations', { keyPath: 'id' })
       if (!db.objectStoreNames.contains('overlays')) db.createObjectStore('overlays', { keyPath: 'id' })
       if (!db.objectStoreNames.contains('overlayImages')) db.createObjectStore('overlayImages')
+      if (!db.objectStoreNames.contains('records')) db.createObjectStore('records', { keyPath: 'id' })
+      if (!db.objectStoreNames.contains('recordImages')) db.createObjectStore('recordImages')
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta')
     },
   })
@@ -108,23 +118,27 @@ export async function createLocalStore(): Promise<PlaceStore> {
     async getOverlayImage(id) {
       return (await db.get('overlayImages', id)) ?? null
     },
-    async exportAll() {
-      return {
-        version: 1 as const,
-        places: await db.getAll('places'),
-        relations: await db.getAll('relations'),
-        overlays: await db.getAll('overlays'),
-      }
+    async listRecords() {
+      return db.getAll('records')
     },
-    async importAll(data: DatasetEnvelope) {
-      const tx = db.transaction(['places', 'relations', 'overlays'], 'readwrite')
-      await tx.objectStore('places').clear()
-      await tx.objectStore('relations').clear()
-      await tx.objectStore('overlays').clear()
-      for (const place of data.places) await tx.objectStore('places').put(place)
-      for (const relation of data.relations) await tx.objectStore('relations').put(relation)
-      for (const overlay of data.overlays) await tx.objectStore('overlays').put(overlay)
+    async getRecord(id) {
+      return (await db.get('records', id)) ?? null
+    },
+    async saveRecord(record) {
+      await db.put('records', record)
+      return record
+    },
+    async removeRecord(id) {
+      const tx = db.transaction(['records', 'recordImages'], 'readwrite')
+      await tx.objectStore('records').delete(id)
+      await tx.objectStore('recordImages').delete(id)
       await tx.done
+    },
+    async putRecordImage(id, blob) {
+      await db.put('recordImages', blob, id)
+    },
+    async getRecordImage(id) {
+      return (await db.get('recordImages', id)) ?? null
     },
   }
 }

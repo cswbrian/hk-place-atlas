@@ -1,7 +1,9 @@
-import L, { rotatedImageOverlay } from './leaflet'
+import L, { addBasemap, rotatedImageOverlay } from './leaflet'
 import { useEffect, useRef } from 'react'
-import type { LotSnapshot, MapOverlay, Place } from '../domain/types'
+import type { BuildingSnapshot, LotSnapshot, MapOverlay, Place } from '../domain/types'
 import { deriveStatus, primaryName } from '../domain/dates'
+import { formatBuildingSummary, formatLotSummary } from '../domain/lots'
+import { clickClosesRing, CLOSE_RING_PX } from './draw'
 import { placeLngLat } from './geometry'
 
 const HK_CENTER: L.LatLngExpression = [22.281, 114.158]
@@ -12,14 +14,23 @@ type OverlayView = MapOverlay & { url: string }
 type Props = {
   places: Place[]
   selectedId: string | null
+  /** Place ids whose full geometry should show (open site / selection). Others render as pins. */
+  focusPlaceIds: string[]
+  /** When true, all places use full geometry (edit mode). */
+  showPlacePolygons: boolean
   visibleLots: LotSnapshot[]
+  visibleBuildings: BuildingSnapshot[]
   attachedLotNumbers: string[]
+  attachedBuildingIds: string[]
   overlays: OverlayView[]
   aligningId: string | null
   drawVertices: [number, number][]
-  onSelectPlace: (id: string) => void
-  onClickLot: (lot: LotSnapshot) => void
+  drawing: boolean
+  onSelectPlace: (id: string, lng: number, lat: number) => void
+  onClickLot: (lot: LotSnapshot, lng: number, lat: number) => void
+  onClickBuilding: (building: BuildingSnapshot, lng: number, lat: number) => void
   onMapClick: (lng: number, lat: number) => void
+  onClosePolygon: () => void
   onViewChange: (view: { west: number; south: number; east: number; north: number; zoom: number }) => void
   onOverlayCorners: (id: string, corners: MapOverlay['corners']) => void
 }
@@ -29,6 +40,7 @@ export function MapView(props: Props) {
   const mapRef = useRef<L.Map | null>(null)
   const placesLayer = useRef<L.LayerGroup>(L.layerGroup())
   const lotsLayer = useRef<L.LayerGroup>(L.layerGroup())
+  const buildingsLayer = useRef<L.LayerGroup>(L.layerGroup())
   const overlayLayer = useRef<L.LayerGroup>(L.layerGroup())
   const drawLayer = useRef<L.LayerGroup>(L.layerGroup())
   const propsRef = useRef(props)
@@ -37,15 +49,23 @@ export function MapView(props: Props) {
   useEffect(() => {
     if (!elRef.current || mapRef.current) return
     const map = L.map(elRef.current, { zoomControl: true }).setView(HK_CENTER, 16)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap',
-      maxZoom: 19,
-    }).addTo(map)
+    addBasemap(map)
     placesLayer.current.addTo(map)
     lotsLayer.current.addTo(map)
+    buildingsLayer.current.addTo(map)
     overlayLayer.current.addTo(map)
     drawLayer.current.addTo(map)
     map.on('click', (event: L.LeafletMouseEvent) => {
+      const vertices = propsRef.current.drawVertices
+      if (propsRef.current.drawing && vertices.length >= 3) {
+        const [lng, lat] = vertices[0]
+        const firstPx = map.latLngToContainerPoint([lat, lng])
+        const clickPx = map.latLngToContainerPoint(event.latlng)
+        if (clickClosesRing(vertices.length, firstPx.distanceTo(clickPx), CLOSE_RING_PX)) {
+          propsRef.current.onClosePolygon()
+          return
+        }
+      }
       propsRef.current.onMapClick(event.latlng.lng, event.latlng.lat)
     })
     const emitView = () => {
@@ -70,34 +90,55 @@ export function MapView(props: Props) {
   useEffect(() => {
     const layer = placesLayer.current
     layer.clearLayers()
+    const focus = new Set(props.focusPlaceIds)
     for (const place of props.places) {
-      const selected = place.id === props.selectedId
+      if (!place.geometry) continue
+      const selected = place.id === props.selectedId || focus.has(place.id)
       const status = deriveStatus(place)
       const color = status === 'standing' ? '#1f6b4a' : status === 'demolished' ? '#9a3412' : '#57534e'
+      const useFullGeometry =
+        props.showPlacePolygons || focus.has(place.id) || place.id === props.selectedId
+      const asPin = !useFullGeometry || place.geometry.type === 'Point'
+
+      if (asPin) {
+        const lngLat = placeLngLat(place)
+        if (!lngLat) continue
+        const [lng, lat] = lngLat
+        const marker = L.circleMarker([lat, lng], {
+          radius: selected ? 9 : 6,
+          color,
+          fillColor: color,
+          fillOpacity: selected ? 0.95 : 0.75,
+          weight: selected ? 3 : 2,
+          interactive: true,
+        })
+        marker.on('click', (event) => {
+          L.DomEvent.stopPropagation(event)
+          propsRef.current.onSelectPlace(place.id, event.latlng.lng, event.latlng.lat)
+        })
+        marker.bindTooltip(primaryName(place))
+        marker.addTo(layer)
+        continue
+      }
+
       const geo = L.geoJSON(place.geometry, {
+        interactive: true,
         style: {
           color,
           weight: selected ? 3 : 2,
           fillColor: color,
-          fillOpacity: place.geometry.type === 'Point' ? 0 : 0.25,
+          fillOpacity: selected ? 0.35 : 0.2,
         },
-        pointToLayer: (_feature, latlng) =>
-          L.circleMarker(latlng, {
-            radius: selected ? 9 : 7,
-            color,
-            fillColor: color,
-            fillOpacity: 0.9,
-            weight: selected ? 3 : 2,
-          }),
       })
       geo.on('click', (event) => {
         L.DomEvent.stopPropagation(event)
-        propsRef.current.onSelectPlace(place.id)
+        const latlng = (event as L.LeafletMouseEvent).latlng
+        propsRef.current.onSelectPlace(place.id, latlng.lng, latlng.lat)
       })
       geo.bindTooltip(primaryName(place))
       geo.addTo(layer)
     }
-  }, [props.places, props.selectedId])
+  }, [props.places, props.selectedId, props.focusPlaceIds, props.showPlacePolygons])
 
   useEffect(() => {
     const layer = lotsLayer.current
@@ -105,21 +146,55 @@ export function MapView(props: Props) {
     for (const lot of props.visibleLots) {
       const attached = props.attachedLotNumbers.includes(lot.number)
       const geo = L.geoJSON(lot.geometry, {
+        interactive: true,
         style: {
           color: attached ? '#b45309' : '#334155',
           weight: attached ? 3 : 1,
           fillColor: attached ? '#f59e0b' : '#64748b',
-          fillOpacity: attached ? 0.35 : 0.12,
+          fillOpacity: attached ? 0.2 : 0.04,
         },
       })
       geo.on('click', (event) => {
         L.DomEvent.stopPropagation(event)
-        propsRef.current.onClickLot(lot)
+        const latlng = (event as L.LeafletMouseEvent).latlng
+        propsRef.current.onClickLot(lot, latlng.lng, latlng.lat)
       })
-      geo.bindTooltip(lot.number)
+      geo.bindTooltip(formatLotSummary(lot).join('<br>'), {
+        sticky: true,
+        opacity: 0.95,
+        className: 'lot-tooltip',
+      })
       geo.addTo(layer)
     }
   }, [props.visibleLots, props.attachedLotNumbers])
+
+  useEffect(() => {
+    const layer = buildingsLayer.current
+    layer.clearLayers()
+    for (const building of props.visibleBuildings) {
+      const attached = props.attachedBuildingIds.includes(building.buildingId)
+      const geo = L.geoJSON(building.geometry, {
+        interactive: true,
+        style: {
+          color: attached ? '#1d4ed8' : '#0f766e',
+          weight: attached ? 3 : 2,
+          fillColor: attached ? '#3b82f6' : '#14b8a6',
+          fillOpacity: attached ? 0.4 : 0.18,
+        },
+      })
+      geo.on('click', (event) => {
+        L.DomEvent.stopPropagation(event)
+        const latlng = (event as L.LeafletMouseEvent).latlng
+        propsRef.current.onClickBuilding(building, latlng.lng, latlng.lat)
+      })
+      geo.bindTooltip(formatBuildingSummary(building).join('<br>'), {
+        sticky: true,
+        opacity: 0.95,
+        className: 'lot-tooltip',
+      })
+      geo.addTo(layer)
+    }
+  }, [props.visibleBuildings, props.attachedBuildingIds])
 
   useEffect(() => {
     const map = mapRef.current
@@ -168,20 +243,58 @@ export function MapView(props: Props) {
     layer.clearLayers()
     if (props.drawVertices.length === 0) return
     const latlngs = props.drawVertices.map(([lng, lat]) => [lat, lng] as L.LatLngExpression)
-    L.polyline(latlngs, { color: '#b91c1c', weight: 2 }).addTo(layer)
-    for (const latlng of latlngs) {
-      L.circleMarker(latlng, { radius: 4, color: '#b91c1c', fillOpacity: 1 }).addTo(layer)
+    const closed = !props.drawing && props.drawVertices.length >= 3
+    if (closed) {
+      L.polygon(latlngs, {
+        color: '#b91c1c',
+        weight: 2,
+        fillColor: '#ef4444',
+        fillOpacity: 0.2,
+        interactive: false,
+      }).addTo(layer)
+    } else {
+      L.polyline(latlngs, { color: '#b91c1c', weight: 2 }).addTo(layer)
+      if (props.drawVertices.length >= 3) {
+        L.polyline([latlngs[latlngs.length - 1], latlngs[0]], {
+          color: '#b91c1c',
+          weight: 1,
+          dashArray: '4 6',
+          interactive: false,
+        }).addTo(layer)
+      }
     }
-  }, [props.drawVertices])
+    latlngs.forEach((latlng, index) => {
+      const first = index === 0
+      const canClose = props.drawing && first && props.drawVertices.length >= 3
+      const marker = L.circleMarker(latlng, {
+        radius: first ? 8 : 4,
+        color: '#b91c1c',
+        fillColor: first ? '#fff' : '#b91c1c',
+        fillOpacity: 1,
+        weight: 2,
+        interactive: canClose,
+      })
+      if (canClose) {
+        marker.bindTooltip('Click to close', { direction: 'top' })
+        marker.on('click', (event) => {
+          L.DomEvent.stopPropagation(event)
+          propsRef.current.onClosePolygon()
+        })
+      }
+      marker.addTo(layer)
+    })
+  }, [props.drawVertices, props.drawing])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !props.selectedId) return
-    const place = props.places.find((item) => item.id === props.selectedId)
+    const place = propsRef.current.places.find((item) => item.id === props.selectedId)
     if (!place) return
-    const [lng, lat] = placeLngLat(place)
-    map.panTo([lat, lng], { animate: true })
-  }, [props.selectedId, props.places])
+    const lngLat = placeLngLat(place)
+    if (!lngLat) return
+    const [lng, lat] = lngLat
+    map.panTo([lat, lng], { animate: false })
+  }, [props.selectedId])
 
   return <div ref={elRef} className="map" />
 }

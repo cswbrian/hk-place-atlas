@@ -1,18 +1,65 @@
-import type { LotSnapshot } from '../../domain/types'
+import type { LotSnapshot, ParcelKind } from '../../domain/types'
 import { clampLotBbox, hk80ToWgs, wgsToHk80 } from './hk80'
-import { parseLotIndexGml } from './parseLotGml'
+import { parseParcelIndexGml } from './parseLotGml'
 
 const apiRoot = import.meta.env.DEV ? '/landsd-api' : 'https://mapapi.geodata.gov.hk'
 
-function toSnapshot(number: string, hk80Ring: [number, number][]): LotSnapshot {
-  const ring = hk80Ring.map(([e, n]) => hk80ToWgs(e, n))
+const LIT: Record<ParcelKind, string> = {
+  lot: 'lot',
+  gla: 'gla',
+  stt: 'stt',
+}
+
+const SEARCH_TYPE: Record<ParcelKind, string> = {
+  lot: 'lot',
+  gla: 'GLA',
+  stt: 'STT',
+}
+
+function toSnapshot(lot: {
+  number: string
+  hk80Ring: [number, number][]
+  kind?: ParcelKind
+  metadata?: LotSnapshot['metadata']
+}): LotSnapshot {
+  const ring = lot.hk80Ring.map(([e, n]) => hk80ToWgs(e, n))
   if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
     ring.push(ring[0])
   }
   return {
-    number,
+    number: lot.number,
     geometry: { type: 'Polygon', coordinates: [ring] },
+    kind: lot.kind ?? 'lot',
+    metadata: lot.metadata,
   }
+}
+
+function bboxFromWgs(west: number, south: number, east: number, north: number) {
+  const [minX, minY] = wgsToHk80(west, south)
+  const [maxX, maxY] = wgsToHk80(east, north)
+  return clampLotBbox(
+    Math.min(minX, maxX),
+    Math.min(minY, maxY),
+    Math.max(minX, maxX),
+    Math.max(minY, maxY),
+  )
+}
+
+async function fetchParcelsOfKind(
+  kind: ParcelKind,
+  west: number,
+  south: number,
+  east: number,
+  north: number,
+): Promise<LotSnapshot[]> {
+  const bbox = bboxFromWgs(west, south, east, north)
+  const url = `${apiRoot}/gs/api/v1.0.0/iC1000/${LIT[kind]}?bbox=${bbox.join(',')},EPSG:2326`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`${kind.toUpperCase()} index failed (${response.status})`)
+  }
+  const xml = await response.text()
+  return parseParcelIndexGml(xml, kind).map((lot) => toSnapshot(lot))
 }
 
 export async function fetchLotsInWgsBounds(
@@ -21,35 +68,34 @@ export async function fetchLotsInWgsBounds(
   east: number,
   north: number,
 ): Promise<LotSnapshot[]> {
-  const [minX, minY] = wgsToHk80(west, south)
-  const [maxX, maxY] = wgsToHk80(east, north)
-  const bbox = clampLotBbox(
-    Math.min(minX, maxX),
-    Math.min(minY, maxY),
-    Math.max(minX, maxX),
-    Math.max(minY, maxY),
-  )
-  const url = `${apiRoot}/gs/api/v1.0.0/iC1000/lot?bbox=${bbox.join(',')},EPSG:2326`
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Lot index failed (${response.status})`)
+  const results = await Promise.allSettled([
+    fetchParcelsOfKind('lot', west, south, east, north),
+    fetchParcelsOfKind('gla', west, south, east, north),
+    fetchParcelsOfKind('stt', west, south, east, north),
+  ])
+  const parcels: LotSnapshot[] = []
+  let firstError: Error | null = null
+  for (const result of results) {
+    if (result.status === 'fulfilled') parcels.push(...result.value)
+    else if (!firstError) firstError = result.reason instanceof Error ? result.reason : new Error(String(result.reason))
   }
-  const xml = await response.text()
-  return parseLotIndexGml(xml).map((lot) => toSnapshot(lot.number, lot.hk80Ring))
+  if (parcels.length === 0 && firstError) throw firstError
+  return parcels
 }
 
 export type LotSearchHit = {
   number: string
+  kind: ParcelKind
   lng: number
   lat: number
   bbox: [number, number, number, number]
 }
 
-export async function searchLotNumber(text: string): Promise<LotSearchHit[]> {
-  const url = `${apiRoot}/gs/api/v1.0.0/lus/lot/SearchNumber?text=${encodeURIComponent(text)}`
+async function searchParcelNumber(kind: ParcelKind, text: string): Promise<LotSearchHit[]> {
+  const url = `${apiRoot}/gs/api/v1.0.0/lus/${SEARCH_TYPE[kind]}/SearchNumber?text=${encodeURIComponent(text)}`
   const response = await fetch(url)
   if (!response.ok) {
-    throw new Error(`Lot search failed (${response.status})`)
+    throw new Error(`${kind.toUpperCase()} search failed (${response.status})`)
   }
   const data = (await response.json()) as {
     candidates?: Array<{
@@ -72,6 +118,7 @@ export async function searchLotNumber(text: string): Promise<LotSearchHit[]> {
     return [
       {
         number,
+        kind,
         lng,
         lat,
         bbox: [sw[0], sw[1], ne[0], ne[1]],
@@ -80,10 +127,26 @@ export async function searchLotNumber(text: string): Promise<LotSearchHit[]> {
   })
 }
 
+function guessParcelKind(text: string): ParcelKind[] {
+  const upper = text.trim().toUpperCase()
+  if (upper.startsWith('GLA')) return ['gla', 'lot', 'stt']
+  if (upper.startsWith('STT')) return ['stt', 'lot', 'gla']
+  return ['lot', 'gla', 'stt']
+}
+
+export async function searchLotNumber(text: string): Promise<LotSearchHit[]> {
+  const order = guessParcelKind(text)
+  for (const kind of order) {
+    const hits = await searchParcelNumber(kind, text)
+    if (hits.length) return hits
+  }
+  return []
+}
+
 export async function fetchLotByNumber(text: string): Promise<LotSnapshot | null> {
   const hits = await searchLotNumber(text)
   const hit = hits[0]
   if (!hit) return null
-  const lots = await fetchLotsInWgsBounds(hit.bbox[0], hit.bbox[1], hit.bbox[2], hit.bbox[3])
-  return lots.find((lot) => lot.number === hit.number) ?? lots[0] ?? null
+  const parcels = await fetchParcelsOfKind(hit.kind, hit.bbox[0], hit.bbox[1], hit.bbox[2], hit.bbox[3])
+  return parcels.find((lot) => lot.number === hit.number) ?? parcels[0] ?? null
 }

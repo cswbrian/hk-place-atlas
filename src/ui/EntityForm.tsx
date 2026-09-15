@@ -1,5 +1,15 @@
-import type { LotSnapshot, Place, RelationType } from '../domain/types'
-import { lotNumbers } from '../domain/lots'
+import type { BuildingSnapshot, LotSnapshot, Place, RelationType } from '../domain/types'
+import type { LinkDraft } from '../domain/links'
+import { formatBuildingSummary, formatLotSummary } from '../domain/lots'
+
+function emptyLink(): LinkDraft {
+  return { label: '', url: '' }
+}
+
+function draftLinks(links: { label?: string; url?: string }[] | undefined): LinkDraft[] {
+  if (!links?.length) return [emptyLink()]
+  return links.map((link) => ({ label: link.label ?? '', url: link.url ?? '' }))
+}
 
 export type Draft = {
   id?: string
@@ -15,10 +25,12 @@ export type Draft = {
   demolishedCirca: boolean
   locationLabel: string
   notes: string
-  sources: { label: string; url: string }[]
+  sources: LinkDraft[]
+  images: LinkDraft[]
   tags: string
   customFields: { key: string; value: string }[]
   lots: LotSnapshot[]
+  buildings: BuildingSnapshot[]
   point: [number, number] | null
   polygon: [number, number][] | null
   siteSuccessorId: string
@@ -34,10 +46,10 @@ type Props = {
   onLotQuery: (value: string) => void
   onSearchLot: () => void
   onRemoveLot: (number: string) => void
-  onStartPoint: () => void
-  onStartDraw: () => void
+  onRemoveBuilding: (buildingId: string) => void
   onSave: () => void
   onCancel: () => void
+  onDelete?: () => void
 }
 
 export function emptyDraft(): Draft {
@@ -57,10 +69,12 @@ export function emptyDraft(): Draft {
     demolishedCirca: false,
     locationLabel: '',
     notes: '',
-    sources: [{ label: '', url: '' }],
+    sources: [emptyLink()],
+    images: [emptyLink()],
     tags: '',
     customFields: [{ key: '', value: '' }],
     lots: [],
+    buildings: [],
     point: null,
     polygon: null,
     siteSuccessorId: '',
@@ -90,12 +104,17 @@ export function draftFromPlace(
     demolishedCirca: Boolean(demolished?.circa),
     locationLabel: place.locationLabel ?? '',
     notes: place.notes,
-    sources: place.sources.length ? place.sources.map((s) => ({ label: s.label, url: s.url ?? '' })) : [{ label: '', url: '' }],
+    sources: draftLinks(place.sources),
+    images: draftLinks(place.images),
     tags: place.tags.join(', '),
     customFields: place.customFields.length ? place.customFields : [{ key: '', value: '' }],
     lots: place.lots ?? [],
-    point: place.geometry.type === 'Point' ? [place.geometry.coordinates[0], place.geometry.coordinates[1]] : null,
-    polygon: place.geometry.type === 'Polygon' ? place.geometry.coordinates[0].map(([lng, lat]) => [lng, lat]) : null,
+    buildings: place.buildings ?? [],
+    point: place.geometry?.type === 'Point' ? [place.geometry.coordinates[0], place.geometry.coordinates[1]] : null,
+    polygon:
+      place.geometry?.type === 'Polygon' && !(place.lots?.length || place.buildings?.length)
+        ? place.geometry.coordinates[0].map(([lng, lat]) => [lng, lat] as [number, number])
+        : null,
     siteSuccessorId: site?.toId ?? '',
     institutionSuccessorId: inst?.toId ?? '',
   }
@@ -110,10 +129,10 @@ export function EntityForm({
   onLotQuery,
   onSearchLot,
   onRemoveLot,
-  onStartPoint,
-  onStartDraw,
+  onRemoveBuilding,
   onSave,
   onCancel,
+  onDelete,
 }: Props) {
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch })
 
@@ -127,7 +146,7 @@ export function EntityForm({
     >
       <h2>{draft.id ? 'Edit place' : 'New place'}</h2>
       <p className="hint">
-        Click one or more lots on the map, or search a lot number. A large building can take several lots.
+        Click a building or parcel on the map; otherwise the click is a pin.
       </p>
 
       <label>
@@ -155,44 +174,59 @@ export function EntityForm({
       </label>
 
       <fieldset>
-        <legend>Lots</legend>
-        <div className="chips">
-          {lotNumbers({ lots: draft.lots }).map((number) => (
-            <button type="button" key={number} className="chip" onClick={() => onRemoveLot(number)}>
-              {number} ×
-            </button>
+        <legend>Location</legend>
+        <ul className="lot-list">
+          {(draft.buildings ?? []).map((building) => (
+            <li key={building.buildingId}>
+              <div>
+                {formatBuildingSummary(building).map((line, index) => (
+                  <p key={`${building.buildingId}-${line}`} className={index === 0 ? undefined : 'muted'}>
+                    {line}
+                  </p>
+                ))}
+              </div>
+              <button type="button" className="chip" onClick={() => onRemoveBuilding(building.buildingId)}>
+                Remove
+              </button>
+            </li>
           ))}
-          {draft.lots.length === 0 && <span className="muted">None yet</span>}
-        </div>
+          {(draft.lots ?? []).map((lot) => (
+            <li key={lot.number}>
+              <div>
+                {formatLotSummary(lot).map((line, index) => (
+                  <p key={`${lot.number}-${line}`} className={index === 0 ? undefined : 'muted'}>
+                    {line}
+                  </p>
+                ))}
+              </div>
+              <button type="button" className="chip" onClick={() => onRemoveLot(lot.number)}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+        {draft.polygon && draft.polygon.length >= 3 && (draft.buildings ?? []).length === 0 && (
+          <p className="muted">Borrowed outline ({draft.polygon.length} vertices)</p>
+        )}
+        {draft.point && (draft.buildings ?? []).length === 0 && (draft.lots ?? []).length === 0 && !draft.polygon && (
+          <p className="muted">
+            Pin {draft.point[1].toFixed(5)}, {draft.point[0].toFixed(5)}
+          </p>
+        )}
+        {(draft.buildings ?? []).length === 0 && (draft.lots ?? []).length === 0 && !draft.point && !(draft.polygon && draft.polygon.length >= 3) && (
+          <span className="muted">Click the map to attach a building, parcel, or pin</span>
+        )}
         <div className="row">
           <input
-            placeholder="IL 2319"
+            placeholder="IL 2319 or GLA-HK 910"
             value={lotQuery}
             onChange={(event) => onLotQuery(event.target.value)}
           />
           <button type="button" onClick={onSearchLot}>
-            Add lot
+            Add parcel
           </button>
         </div>
         {lotStatus && <p className="muted">{lotStatus}</p>}
-      </fieldset>
-
-      <fieldset>
-        <legend>Fallback shape</legend>
-        <div className="row">
-          <button type="button" onClick={onStartPoint}>
-            Use a point
-          </button>
-          <button type="button" onClick={onStartDraw}>
-            Draw footprint
-          </button>
-        </div>
-        {draft.point && (
-          <p className="muted">
-            Point {draft.point[1].toFixed(5)}, {draft.point[0].toFixed(5)}
-          </p>
-        )}
-        {draft.polygon && <p className="muted">Polygon with {draft.polygon.length} vertices</p>}
       </fieldset>
 
       <div className="row">
@@ -258,33 +292,19 @@ export function EntityForm({
         Tags (comma)
         <input value={draft.tags} onChange={(event) => set({ tags: event.target.value })} />
       </label>
-      <label>
-        Source
-        <input
-          placeholder="Label"
-          value={draft.sources[0]?.label ?? ''}
-          onChange={(event) => set({ sources: [{ ...draft.sources[0], label: event.target.value, url: draft.sources[0]?.url ?? '' }] })}
-        />
-        <input
-          placeholder="https://"
-          value={draft.sources[0]?.url ?? ''}
-          onChange={(event) => set({ sources: [{ label: draft.sources[0]?.label ?? '', url: event.target.value }] })}
-        />
-      </label>
+      <LinkRows
+        legend="Sources"
+        addLabel="Add source"
+        rows={draft.sources}
+        onChange={(sources) => set({ sources })}
+      />
+      <LinkRows
+        legend="Images"
+        addLabel="Add image"
+        rows={draft.images}
+        onChange={(images) => set({ images })}
+      />
 
-      <label>
-        Succeeded on this site by
-        <select value={draft.siteSuccessorId} onChange={(event) => set({ siteSuccessorId: event.target.value })}>
-          <option value="">—</option>
-          {places
-            .filter((place) => place.id !== draft.id)
-            .map((place) => (
-              <option key={place.id} value={place.id}>
-                {place.names[0]?.text ?? place.id}
-              </option>
-            ))}
-        </select>
-      </label>
       <label>
         Institution continued as
         <select
@@ -294,6 +314,8 @@ export function EntityForm({
           <option value="">—</option>
           {places
             .filter((place) => place.id !== draft.id)
+            .filter((place) => !place.id.startsWith('bdbiar-') || place.updatedAt !== place.createdAt || (place.buildings?.length ?? 0) > 0)
+            .slice(0, 300)
             .map((place) => (
               <option key={place.id} value={place.id}>
                 {place.names[0]?.text ?? place.id}
@@ -307,7 +329,61 @@ export function EntityForm({
         <button type="button" onClick={onCancel}>
           Cancel
         </button>
+        {draft.id && onDelete && (
+          <button type="button" onClick={onDelete}>
+            Delete
+          </button>
+        )}
       </div>
     </form>
+  )
+}
+
+function LinkRows({
+  legend,
+  addLabel,
+  rows,
+  onChange,
+}: {
+  legend: string
+  addLabel: string
+  rows: LinkDraft[]
+  onChange: (rows: LinkDraft[]) => void
+}) {
+  const update = (index: number, patch: Partial<LinkDraft>) => {
+    const next = rows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    onChange(next)
+  }
+
+  return (
+    <fieldset>
+      <legend>{legend}</legend>
+      <ul className="link-list">
+        {rows.map((row, index) => (
+          <li key={index}>
+            <input
+              placeholder="Label (optional)"
+              value={row.label}
+              onChange={(event) => update(index, { label: event.target.value })}
+            />
+            <input
+              placeholder="https://"
+              value={row.url}
+              onChange={(event) => update(index, { url: event.target.value })}
+            />
+            <button
+              type="button"
+              className="chip"
+              onClick={() => onChange(rows.length === 1 ? [emptyLink()] : rows.filter((_, i) => i !== index))}
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" onClick={() => onChange([...rows, emptyLink()])}>
+        {addLabel}
+      </button>
+    </fieldset>
   )
 }

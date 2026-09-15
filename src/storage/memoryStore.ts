@@ -1,9 +1,12 @@
-import type { DatasetEnvelope } from '../domain/types'
+import type { AtlasRecord, MapOverlay, Place, Relation } from '../domain/types'
 import type { PlaceStore } from './PlaceStore'
 
-export function createMemoryStore(
-  initial?: Partial<DatasetEnvelope>,
-): PlaceStore {
+export function createMemoryStore(initial?: {
+  places?: Place[]
+  relations?: Relation[]
+  overlays?: MapOverlay[]
+  records?: AtlasRecord[]
+}): PlaceStore {
   const places = new Map((initial?.places ?? []).map((place) => [place.id, place]))
   const relations = new Map(
     (initial?.relations ?? []).map((relation) => [relation.id, relation]),
@@ -11,7 +14,11 @@ export function createMemoryStore(
   const overlays = new Map(
     (initial?.overlays ?? []).map((overlay) => [overlay.id, overlay]),
   )
+  const records = new Map(
+    (initial?.records ?? []).map((record) => [record.id, record]),
+  )
   const images = new Map<string, Blob>()
+  const recordImages = new Map<string, Blob>()
 
   return {
     async listPlaces() {
@@ -59,21 +66,25 @@ export function createMemoryStore(
     async getOverlayImage(id) {
       return images.get(id) ?? null
     },
-    async exportAll() {
-      return {
-        version: 1,
-        places: [...places.values()],
-        relations: [...relations.values()],
-        overlays: [...overlays.values()],
-      }
+    async listRecords() {
+      return [...records.values()]
     },
-    async importAll(data) {
-      places.clear()
-      relations.clear()
-      overlays.clear()
-      for (const place of data.places) places.set(place.id, place)
-      for (const relation of data.relations) relations.set(relation.id, relation)
-      for (const overlay of data.overlays) overlays.set(overlay.id, overlay)
+    async getRecord(id) {
+      return records.get(id) ?? null
+    },
+    async saveRecord(record) {
+      records.set(record.id, record)
+      return record
+    },
+    async removeRecord(id) {
+      records.delete(id)
+      recordImages.delete(id)
+    },
+    async putRecordImage(id, blob) {
+      recordImages.set(id, blob)
+    },
+    async getRecordImage(id) {
+      return recordImages.get(id) ?? null
     },
   }
 }
