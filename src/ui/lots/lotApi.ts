@@ -1,20 +1,6 @@
 import type { LotSnapshot, ParcelKind } from '../../domain/types'
-import { clampLotBbox, hk80ToWgs, wgsToHk80 } from './hk80'
+import { hk80ToWgs } from './hk80'
 import { parseParcelIndexGml } from './parseLotGml'
-
-const apiRoot = import.meta.env.DEV ? '/landsd-api' : 'https://mapapi.geodata.gov.hk'
-
-const LIT: Record<ParcelKind, string> = {
-  lot: 'lot',
-  gla: 'gla',
-  stt: 'stt',
-}
-
-const SEARCH_TYPE: Record<ParcelKind, string> = {
-  lot: 'lot',
-  gla: 'GLA',
-  stt: 'STT',
-}
 
 function toSnapshot(lot: {
   number: string
@@ -34,17 +20,6 @@ function toSnapshot(lot: {
   }
 }
 
-function bboxFromWgs(west: number, south: number, east: number, north: number) {
-  const [minX, minY] = wgsToHk80(west, south)
-  const [maxX, maxY] = wgsToHk80(east, north)
-  return clampLotBbox(
-    Math.min(minX, maxX),
-    Math.min(minY, maxY),
-    Math.max(minX, maxX),
-    Math.max(minY, maxY),
-  )
-}
-
 async function fetchParcelsOfKind(
   kind: ParcelKind,
   west: number,
@@ -52,9 +27,11 @@ async function fetchParcelsOfKind(
   east: number,
   north: number,
 ): Promise<LotSnapshot[]> {
-  const bbox = bboxFromWgs(west, south, east, north)
-  const url = `${apiRoot}/gs/api/v1.0.0/iC1000/${LIT[kind]}?bbox=${bbox.join(',')},EPSG:2326`
-  const response = await fetch(url)
+  const params = new URLSearchParams({
+    kind,
+    bbox: `${west},${south},${east},${north}`,
+  })
+  const response = await fetch(`/api/gis/parcels?${params}`)
   if (!response.ok) {
     throw new Error(`${kind.toUpperCase()} index failed (${response.status})`)
   }
@@ -92,8 +69,8 @@ export type LotSearchHit = {
 }
 
 async function searchParcelNumber(kind: ParcelKind, text: string): Promise<LotSearchHit[]> {
-  const url = `${apiRoot}/gs/api/v1.0.0/lus/${SEARCH_TYPE[kind]}/SearchNumber?text=${encodeURIComponent(text)}`
-  const response = await fetch(url)
+  const params = new URLSearchParams({ kind, q: text })
+  const response = await fetch(`/api/gis/parcel-search?${params}`)
   if (!response.ok) {
     throw new Error(`${kind.toUpperCase()} search failed (${response.status})`)
   }

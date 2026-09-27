@@ -1,27 +1,14 @@
-import type { Point } from 'geojson'
-import type { BuildingSnapshot, LotSnapshot, Place, PlaceGeometry } from './types'
+import type { BuildingSnapshot, LotSnapshot, Establishment, EstablishmentGeometry } from './types'
 import { compareSiteOrder, geometryContainsPoint, siteCluster } from './site'
 
 const NEARBY_METERS = 25
-
-export type QueryableRecord = {
-  id: string
-  geometry?: Point
-  links: Array<
-    | { kind: 'place'; placeId: string }
-    | { kind: 'building'; buildingId: string }
-    | { kind: 'lot'; lotNumber: string }
-    | { kind: 'point' }
-  >
-}
 
 export type SiteQueryInput = {
   lng: number
   lat: number
   buildings: BuildingSnapshot[]
   lots: LotSnapshot[]
-  places: Place[]
-  records: QueryableRecord[]
+  establishments: Establishment[]
 }
 
 export type SiteQueryResult = {
@@ -29,8 +16,7 @@ export type SiteQueryResult = {
   lat: number
   buildings: BuildingSnapshot[]
   lots: LotSnapshot[]
-  placeIds: string[]
-  recordIds: string[]
+  establishmentIds: string[]
 }
 
 export function querySite(input: SiteQueryInput): SiteQueryResult {
@@ -40,97 +26,72 @@ export function querySite(input: SiteQueryInput): SiteQueryResult {
   )
   const lots = input.lots.filter((lot) => geometryContainsPoint(lot.geometry, point))
   const lotNumbers = new Set(lots.map((lot) => lot.number))
-  const hitPlacePolygons = input.places.filter(
-    (place) =>
-      place.geometry != null
-      && place.geometry.type !== 'Point'
-      && geometryContainsPoint(place.geometry, point),
+  const hitEstablishmentPolygons = input.establishments.filter(
+    (establishment) =>
+      establishment.geometry != null
+      && establishment.geometry.type !== 'Point'
+      && geometryContainsPoint(establishment.geometry, point),
   )
-  const polygonHit = buildings.length > 0 || lots.length > 0 || hitPlacePolygons.length > 0
+  const polygonHit = buildings.length > 0 || lots.length > 0 || hitEstablishmentPolygons.length > 0
   const hitGeometries = [
     ...buildings.map((building) => building.geometry),
     ...lots.map((lot) => lot.geometry),
-    ...hitPlacePolygons.flatMap((place) => (place.geometry ? [place.geometry] : [])),
+    ...hitEstablishmentPolygons.flatMap((establishment) => (establishment.geometry ? [establishment.geometry] : [])),
   ]
 
-  const directPlaceIds = new Set<string>()
-  for (const place of input.places) {
-    if (place.geometry && place.geometry.type !== 'Point' && geometryContainsPoint(place.geometry, point)) {
-      directPlaceIds.add(place.id)
+  const directEstablishmentIds = new Set<string>()
+  for (const establishment of input.establishments) {
+    if (establishment.geometry && establishment.geometry.type !== 'Point' && geometryContainsPoint(establishment.geometry, point)) {
+      directEstablishmentIds.add(establishment.id)
       continue
     }
-    if ((place.lots ?? []).some((lot) => lotNumbers.has(lot.number))) {
-      directPlaceIds.add(place.id)
+    if ((establishment.lots ?? []).some((lot) => lotNumbers.has(lot.number))) {
+      directEstablishmentIds.add(establishment.id)
       continue
     }
-    if (!place.geometry || place.geometry.type !== 'Point') continue
-    const coords = place.geometry.coordinates as [number, number]
+    if (!establishment.geometry || establishment.geometry.type !== 'Point') continue
+    const coords = establishment.geometry.coordinates as [number, number]
     if (polygonHit) {
       if (hitGeometries.some((geometry) => geometryContainsPoint(geometry, coords))) {
-        directPlaceIds.add(place.id)
+        directEstablishmentIds.add(establishment.id)
       }
       continue
     }
     const bdbiarPin =
-      place.customFields.some((field) => field.key === 'bdbiarId')
-      && (place.lots ?? []).length === 0
-      && (place.buildings ?? []).length === 0
+      establishment.customFields.some((field) => field.key === 'bdbiarId')
+      && (establishment.lots ?? []).length === 0
+      && (establishment.buildings ?? []).length === 0
     const limit = bdbiarPin ? 8 : NEARBY_METERS
-    if (haversineMeters(coords, point) <= limit) directPlaceIds.add(place.id)
+    if (haversineMeters(coords, point) <= limit) directEstablishmentIds.add(establishment.id)
   }
 
   for (const building of buildings) {
-    for (const place of input.places) {
-      if ((place.buildings ?? []).some((item) => item.buildingId === building.buildingId)) {
-        directPlaceIds.add(place.id)
+    for (const establishment of input.establishments) {
+      if ((establishment.buildings ?? []).some((item) => item.buildingId === building.buildingId)) {
+        directEstablishmentIds.add(establishment.id)
       }
     }
   }
 
   const clustered = new Set<string>()
-  for (const id of directPlaceIds) {
-    for (const member of siteCluster(input.places, id, { nearbyPoints: !polygonHit })) {
+  for (const id of directEstablishmentIds) {
+    for (const member of siteCluster(input.establishments, id, { nearbyPoints: !polygonHit })) {
       clustered.add(member)
     }
   }
 
-  const placeIds = [...clustered]
-    .map((id) => input.places.find((place) => place.id === id))
-    .filter((place): place is Place => Boolean(place))
+  const establishmentIds = [...clustered]
+    .map((id) => input.establishments.find((establishment) => establishment.id === id))
+    .filter((establishment): establishment is Establishment => Boolean(establishment))
     .sort(compareSiteOrder)
-    .map((place) => place.id)
-
-  const placeIdSet = new Set(placeIds)
-  const buildingIds = new Set(buildings.map((building) => building.buildingId))
-  const recordIds = input.records
-    .filter((record) => {
-      if (record.geometry?.type === 'Point') {
-        const coords: [number, number] = [
-          record.geometry.coordinates[0],
-          record.geometry.coordinates[1],
-        ]
-        if (polygonHit) {
-          if (hitGeometries.some((geometry) => geometryContainsPoint(geometry, coords))) return true
-        } else if (haversineMeters(coords, point) <= NEARBY_METERS) {
-          return true
-        }
-      }
-      return record.links.some((link) => {
-        if (link.kind === 'place') return placeIdSet.has(link.placeId)
-        if (link.kind === 'building') return buildingIds.has(link.buildingId)
-        if (link.kind === 'lot') return lotNumbers.has(link.lotNumber)
-        return false
-      })
-    })
-    .map((record) => record.id)
+    .map((establishment) => establishment.id)
 
   return {
     lng: input.lng,
     lat: input.lat,
     buildings,
     lots,
-    placeIds,
-    recordIds,
+    establishmentIds,
   }
 }
 
@@ -145,8 +106,8 @@ function haversineMeters(a: [number, number], b: [number, number]): number {
   return 2 * earth * Math.asin(Math.sqrt(h))
 }
 
-export function placeInBounds(
-  geometry: PlaceGeometry | null,
+export function establishmentInBounds(
+  geometry: EstablishmentGeometry | null,
   bounds: { west: number; south: number; east: number; north: number },
 ): boolean {
   if (!geometry) return false
@@ -154,7 +115,7 @@ export function placeInBounds(
   return lng >= bounds.west && lng <= bounds.east && lat >= bounds.south && lat <= bounds.north
 }
 
-function geometryCentroid(geometry: PlaceGeometry): [number, number] {
+function geometryCentroid(geometry: EstablishmentGeometry): [number, number] {
   if (geometry.type === 'Point') return [geometry.coordinates[0], geometry.coordinates[1]]
   if (geometry.type === 'Polygon') {
     const ring = geometry.coordinates[0] ?? []

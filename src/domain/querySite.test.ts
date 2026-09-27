@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { placeInBounds, querySite } from './querySite'
-import type { BuildingSnapshot, LotSnapshot, Place } from './types'
+import { establishmentInBounds, querySite } from './querySite'
+import type { BuildingSnapshot, LotSnapshot, Establishment } from './types'
 
 const now = '2026-01-01T00:00:00.000Z'
 
-function place(partial: Pick<Place, 'id'> & Partial<Place>): Place {
+function establishment(partial: Pick<Establishment, 'id'> & Partial<Establishment>): Establishment {
   return {
     names: [{ lang: 'en', text: partial.id, primary: true }],
     status: 'unknown',
@@ -54,8 +54,7 @@ describe('querySite', () => {
       lat: 22.2805,
       buildings: [footprint],
       lots: [parcel],
-      places: [],
-      records: [],
+      establishments: [],
     })
     expect(site.buildings.map((item) => item.buildingId)).toEqual(['b1'])
     expect(site.lots.map((item) => item.number)).toEqual(['IL 1'])
@@ -63,14 +62,14 @@ describe('querySite', () => {
 
   it('includes places that share hit lots or contain the point, newest first', () => {
     const parcel = lot('IL 1', 114.15)
-    const standing = place({
+    const standing = establishment({
       id: 'now',
       geometry: parcel.geometry,
       lots: [parcel],
       status: 'standing',
       built: { year: 1980 },
     })
-    const previous = place({
+    const previous = establishment({
       id: 'then',
       geometry: { type: 'Point', coordinates: [114.1505, 22.2805] },
       lots: [parcel],
@@ -78,7 +77,7 @@ describe('querySite', () => {
       built: { year: 1911 },
       demolished: { year: 1977 },
     })
-    const elsewhere = place({
+    const elsewhere = establishment({
       id: 'away',
       geometry: { type: 'Point', coordinates: [114.2, 22.3] },
       status: 'standing',
@@ -88,14 +87,13 @@ describe('querySite', () => {
       lat: 22.2805,
       buildings: [],
       lots: [parcel],
-      places: [standing, previous, elsewhere],
-      records: [],
+      establishments: [standing, previous, elsewhere],
     })
-    expect(site.placeIds).toEqual(['now', 'then'])
+    expect(site.establishmentIds).toEqual(['now', 'then'])
   })
 
   it('includes nearby point places within 25 m when nothing else hits', () => {
-    const pin = place({
+    const pin = establishment({
       id: 'pin',
       geometry: { type: 'Point', coordinates: [114.15, 22.28] },
       status: 'standing',
@@ -105,22 +103,21 @@ describe('querySite', () => {
       lat: 22.28001,
       buildings: [],
       lots: [],
-      places: [pin],
-      records: [],
+      establishments: [pin],
     })
-    expect(site.placeIds).toEqual(['pin'])
+    expect(site.establishmentIds).toEqual(['pin'])
   })
 
   it('does not pull nearby pins when the click hits a lot polygon', () => {
     const parcel = lot('IL 1', 114.15)
-    const standing = place({
+    const standing = establishment({
       id: 'now',
       geometry: parcel.geometry,
       lots: [parcel],
       status: 'standing',
       built: { year: 1980 },
     })
-    const neighbor = place({
+    const neighbor = establishment({
       id: 'neighbor',
       geometry: { type: 'Point', coordinates: [114.1499, 22.2805] },
       status: 'standing',
@@ -130,22 +127,21 @@ describe('querySite', () => {
       lat: 22.2805,
       buildings: [],
       lots: [parcel],
-      places: [standing, neighbor],
-      records: [],
+      establishments: [standing, neighbor],
     })
-    expect(site.placeIds).toEqual(['now'])
+    expect(site.establishmentIds).toEqual(['now'])
   })
 
   it('does not pull nearby pins when the click hits a building polygon', () => {
     const footprint = building('b1', 114.15)
-    const claimed = place({
+    const claimed = establishment({
       id: 'tower',
       geometry: footprint.geometry,
       buildings: [footprint],
       status: 'standing',
       built: { year: 1973 },
     })
-    const neighbor = place({
+    const neighbor = establishment({
       id: 'next-door',
       geometry: { type: 'Point', coordinates: [114.1499, 22.2805] },
       status: 'standing',
@@ -155,15 +151,14 @@ describe('querySite', () => {
       lat: 22.2805,
       buildings: [footprint],
       lots: [],
-      places: [claimed, neighbor],
-      records: [],
+      establishments: [claimed, neighbor],
     })
-    expect(site.placeIds).toEqual(['tower'])
+    expect(site.establishmentIds).toEqual(['tower'])
   })
 
   it('includes a pin that sits inside the hit polygon as the same site', () => {
     const footprint = building('b1', 114.15)
-    const previous = place({
+    const previous = establishment({
       id: 'then',
       geometry: { type: 'Point', coordinates: [114.1504, 22.2804] },
       status: 'demolished',
@@ -175,22 +170,21 @@ describe('querySite', () => {
       lat: 22.2805,
       buildings: [footprint],
       lots: [],
-      places: [previous],
-      records: [],
+      establishments: [previous],
     })
-    expect(site.placeIds).toEqual(['then'])
+    expect(site.establishmentIds).toEqual(['then'])
   })
 
   it('does not chain a lot-sharing predecessor out to nearby unrelated pins', () => {
     const parcel = lot('IL 1', 114.15)
-    const standing = place({
+    const standing = establishment({
       id: 'now',
       geometry: parcel.geometry,
       lots: [parcel],
       status: 'standing',
       built: { year: 1980 },
     })
-    const previous = place({
+    const previous = establishment({
       id: 'then',
       geometry: { type: 'Point', coordinates: [114.1504, 22.28015] },
       lots: [parcel],
@@ -198,7 +192,7 @@ describe('querySite', () => {
       built: { year: 1911 },
       demolished: { year: 1977 },
     })
-    const stray = place({
+    const stray = establishment({
       id: 'stray',
       geometry: { type: 'Point', coordinates: [114.1504, 22.27995] },
       status: 'demolished',
@@ -208,10 +202,9 @@ describe('querySite', () => {
       lat: 22.2805,
       buildings: [],
       lots: [parcel],
-      places: [standing, previous, stray],
-      records: [],
+      establishments: [standing, previous, stray],
     })
-    expect(site.placeIds).toEqual(['now', 'then'])
+    expect(site.establishmentIds).toEqual(['now', 'then'])
   })
 
   it('returns an empty site when the click hits nothing', () => {
@@ -220,48 +213,16 @@ describe('querySite', () => {
       lat: 22.0,
       buildings: [],
       lots: [],
-      places: [],
-      records: [],
+      establishments: [],
     })
     expect(site.buildings).toEqual([])
     expect(site.lots).toEqual([])
-    expect(site.placeIds).toEqual([])
-    expect(site.recordIds).toEqual([])
-  })
-
-  it('includes records linked to hit places or nearby pins', () => {
-    const pin = place({
-      id: 'pin',
-      geometry: { type: 'Point', coordinates: [114.15, 22.28] },
-      status: 'standing',
-    })
-    const site = querySite({
-      lng: 114.15,
-      lat: 22.28,
-      buildings: [],
-      lots: [],
-      places: [pin],
-      records: [
-        {
-          id: 'rec1',
-          geometry: { type: 'Point', coordinates: [114.15001, 22.28001] },
-          links: [{ kind: 'point' }],
-        },
-        {
-          id: 'rec2',
-          links: [{ kind: 'place', placeId: 'pin' }],
-        },
-        {
-          id: 'rec3',
-          links: [{ kind: 'place', placeId: 'elsewhere' }],
-        },
-      ],
-    })
-    expect(site.recordIds.sort()).toEqual(['rec1', 'rec2'])
+    expect(site.establishmentIds).toEqual([])
+    expect(site).not.toHaveProperty('recordIds')
   })
 
   it('ignores unlocated places for map hits', () => {
-    const unlocated = place({
+    const unlocated = establishment({
       id: 'notes-only',
       geometry: null,
     })
@@ -270,10 +231,9 @@ describe('querySite', () => {
       lat: 22.28,
       buildings: [],
       lots: [],
-      places: [unlocated],
-      records: [],
+      establishments: [unlocated],
     })
-    expect(site.placeIds).toEqual([])
-    expect(placeInBounds(null, { west: 114, south: 22, east: 115, north: 23 })).toBe(false)
+    expect(site.establishmentIds).toEqual([])
+    expect(establishmentInBounds(null, { west: 114, south: 22, east: 115, north: 23 })).toBe(false)
   })
 })

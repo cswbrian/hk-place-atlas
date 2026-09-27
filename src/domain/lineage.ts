@@ -2,14 +2,14 @@ import type { Relation, RelationType } from './types'
 
 export function lineageChain(
   relations: Relation[],
-  placeId: string,
+  establishmentId: string,
   type: RelationType,
 ): string[] {
   const edges = relations.filter((relation) => relation.type === type)
-  const chain = [placeId]
-  const seen = new Set([placeId])
+  const chain = [establishmentId]
+  const seen = new Set([establishmentId])
 
-  let current = placeId
+  let current = establishmentId
   while (true) {
     const child = edges.find((edge) => edge.fromId === current && !seen.has(edge.toId))
     if (!child) break
@@ -18,7 +18,7 @@ export function lineageChain(
     current = child.toId
   }
 
-  current = placeId
+  current = establishmentId
   while (true) {
     const parent = edges.find((edge) => edge.toId === current && !seen.has(edge.fromId))
     if (!parent) break

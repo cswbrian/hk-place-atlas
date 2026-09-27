@@ -4,36 +4,42 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "commons:fetch": "node --experimental-strip-types scripts/fetch-commons-category.ts",
-    "ingest:fetch": "node --experimental-strip-types scripts/fetch-place-source.ts",
+    "dev": "concurrently -k -n web,api -c cyan,magenta \"vite\" \"wrangler dev --port 8787\"",
+    "dev:web": "vite",
+    "dev:api": "mkdir -p dist && wrangler dev --port 8787",
     "build": "tsc -b && vite build",
+    "deploy": "npm run build && wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed": "tsx scripts/seed.ts",
+    "seed:remote": "tsx scripts/seed.ts --remote",
+    "tiles": "tsx scripts/seed.ts",
+    "migrate:local": "wrangler d1 migrations apply hk-atlas --local",
+    "migrate:remote": "wrangler d1 migrations apply hk-atlas --remote"
   },
   "dependencies": {
-    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
-    "idb": "^8.0.3",
-    "leaflet": "^1.9.4",
-    "leaflet-imageoverlay-rotated": "^0.2.1",
     "maplibre-gl": "^6.9.0",
     "proj4": "^2.22.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "schema-dts": "^2.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260915.1",
     "@types/geojson": "^7946.0.16",
-    "@types/leaflet": "^1.9.22",
     "@types/node": "^24.13.3",
     "@types/proj4": "^2.5.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^9.2.1",
     "oxlint": "^1.81.0",
+    "tsx": "^4.20.5",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "wrangler": "^4.37.1"
   }
 }

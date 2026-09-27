@@ -15,9 +15,9 @@ export type FuzzyDate = {
   circa?: boolean
 }
 
-export type PlaceStatus = 'standing' | 'demolished' | 'unknown'
+export type EstablishmentStatus = 'standing' | 'demolished' | 'unknown'
 
-export type PlaceGeometry = Point | Polygon | MultiPolygon
+export type EstablishmentGeometry = Point | Polygon | MultiPolygon
 
 export type ParcelKind = 'lot' | 'gla' | 'stt'
 
@@ -60,13 +60,13 @@ export type CustomField = {
   value: string
 }
 
-export type Place = {
+export type Establishment = {
   id: string
   names: LocalizedName[]
-  status: PlaceStatus
+  status: EstablishmentStatus
   built: FuzzyDate | null
   demolished: FuzzyDate | null
-  geometry: PlaceGeometry | null
+  geometry: EstablishmentGeometry | null
   lots?: LotSnapshot[]
   buildings?: BuildingSnapshot[]
   locationLabel?: string
@@ -81,27 +81,6 @@ export type Place = {
   updatedBy?: string
 }
 
-export type RecordLink =
-  | { kind: 'place'; placeId: string }
-  | { kind: 'building'; buildingId: string }
-  | { kind: 'lot'; lotNumber: string }
-  | { kind: 'point' }
-
-export type AtlasRecord = {
-  id: string
-  title: string
-  notes: string
-  depictedAt?: FuzzyDate
-  geometry?: Point
-  urls: Source[]
-  tags: string[]
-  links: RecordLink[]
-  createdAt: string
-  updatedAt: string
-  createdBy?: string
-  updatedBy?: string
-}
-
 export type RelationType = 'site_successor' | 'institution_successor'
 
 export type Relation = {
@@ -110,22 +89,4 @@ export type Relation = {
   toId: string
   type: RelationType
   note?: string
-}
-
-export type OverlayCorner = { lat: number; lng: number }
-
-export type MapOverlay = {
-  id: string
-  title: string
-  year?: number
-  mimeType: string
-  opacity: number
-  corners: {
-    nw: OverlayCorner
-    ne: OverlayCorner
-    se: OverlayCorner
-  }
-  visible: boolean
-  createdAt: string
-  updatedAt: string
 }

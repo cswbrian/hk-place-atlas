@@ -1,30 +1,46 @@
-import { bilingualNames } from '../domain/dates'
-import { formatBuildingSummary, formatLotSummary } from '../domain/lots'
+import { bilingualNames, catalogYear } from '../domain/dates'
+import { displayNames, type SiteLocale } from '../domain/locale'
+import { formatBuildingSummary } from '../domain/lots'
 import { compareSiteOrder } from '../domain/site'
 import type { SiteQueryResult } from '../domain/querySite'
-import type { AtlasRecord, Place } from '../domain/types'
-import { linkText } from '../domain/links'
+import type { Establishment } from '../domain/types'
 
 type Props = {
   site: SiteQueryResult
-  places: Place[]
-  records: AtlasRecord[]
-  onEditPlace: (place: Place) => void
-  onSelectPlace: (id: string) => void
-  onAddPlace: () => void
-  onAddRecord: () => void
+  establishments: Establishment[]
+  onSelectEstablishment: (id: string) => void
   onClose: () => void
+  onEditEstablishment?: (establishment: Establishment) => void
+  onAddEstablishment?: () => void
+  locale?: SiteLocale
+  labels?: {
+    title: string
+    titleZh: string
+    close: string
+    empty: string
+    add: string
+  }
 }
 
-function indexYear(place: Place | null): string {
-  if (!place) return '—'
-  const date = place.built ?? place.demolished
-  if (!date) return '—'
-  return date.circa ? `c. ${date.year}` : String(date.year)
+function indexYear(establishment: Establishment | null) {
+  if (!establishment) return catalogYear(null)
+  return catalogYear(establishment.built ?? establishment.demolished)
+}
+
+export function CatalogYearMark({ text, circa }: { text: string; circa: boolean }) {
+  return (
+    <span
+      className={circa ? 'catalog-year catalog-year-circa' : 'catalog-year'}
+      aria-label={circa ? `circa ${text}` : undefined}
+    >
+      {text}
+    </span>
+  )
 }
 
 function CatalogRow({
   year,
+  circa = false,
   title,
   zh,
   meta,
@@ -32,6 +48,7 @@ function CatalogRow({
   onEdit,
 }: {
   year: string
+  circa?: boolean
   title: string
   zh?: string | null
   meta?: string | null
@@ -40,7 +57,7 @@ function CatalogRow({
 }) {
   return (
     <li className="catalog-row">
-      <span className="catalog-year">{year}</span>
+      <CatalogYearMark text={year} circa={circa} />
       <div className="catalog-name">
         {onTitle ? (
           <button type="button" className="linkish" onClick={onTitle}>
@@ -65,33 +82,33 @@ function CatalogRow({
 
 export function SitePanel({
   site,
-  places,
-  records,
-  onEditPlace,
-  onSelectPlace,
-  onAddPlace,
-  onAddRecord,
+  establishments,
+  onEditEstablishment,
+  onSelectEstablishment,
+  onAddEstablishment,
   onClose,
+  locale,
+  labels,
 }: Props) {
-  const sitePlaces = site.placeIds
-    .map((id) => places.find((place) => place.id === id))
-    .filter((place): place is Place => Boolean(place))
+  const title = labels?.title ?? 'This site'
+  const titleZh = labels?.titleZh ?? '此地'
+  const closeLabel = labels?.close ?? 'Close'
+  const emptyLabel = labels?.empty ?? 'Nothing recorded here yet. Add a place at this pin.'
+  const addLabel = labels?.add ?? 'Add place'
+  const siteEstablishments = site.establishmentIds
+    .map((id) => establishments.find((establishment) => establishment.id === id))
+    .filter((establishment): establishment is Establishment => Boolean(establishment))
     .sort(compareSiteOrder)
-  const siteRecords = site.recordIds
-    .map((id) => records.find((record) => record.id === id))
-    .filter((record): record is AtlasRecord => Boolean(record))
-  const empty =
-    sitePlaces.length === 0
-    && site.buildings.length === 0
-    && site.lots.length === 0
-    && siteRecords.length === 0
+  const empty = siteEstablishments.length === 0 && site.buildings.length === 0
 
   return (
     <article className="detail site-panel">
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h2>This site</h2>
+        <h2>
+          {title} <span className="zh">{titleZh}</span>
+        </h2>
         <button type="button" className="linkish" onClick={onClose}>
-          Close
+          {closeLabel}
         </button>
       </div>
       <p className="muted">
@@ -99,27 +116,32 @@ export function SitePanel({
       </p>
 
       {empty && (
-        <p className="hint">Nothing recorded here yet. Add a place or a record at this pin.</p>
+        <p className="hint">{emptyLabel}</p>
       )}
 
-      {(sitePlaces.length > 0 || site.buildings.length > 0) && (
+      {(siteEstablishments.length > 0 || site.buildings.length > 0) && (
       <ol className="catalog catalog-site">
-        {sitePlaces.length > 0
-          ? sitePlaces.map((place) => {
-              const { en, zh } = bilingualNames(place)
+        {siteEstablishments.length > 0
+          ? siteEstablishments.map((establishment) => {
+              const { en, zh } = bilingualNames(establishment)
+              const shown = locale
+                ? displayNames({ nameEn: en, nameZh: zh ?? '' }, locale)
+                : { title: en, secondary: zh }
               const location =
-                place.locationLabel && place.locationLabel.trim() !== en.trim()
-                  ? place.locationLabel
+                establishment.locationLabel && establishment.locationLabel.trim() !== en.trim()
+                  ? establishment.locationLabel
                   : null
+              const { text, circa } = indexYear(establishment)
               return (
                 <CatalogRow
-                  key={place.id}
-                  year={indexYear(place)}
-                  title={en}
-                  zh={zh}
+                  key={establishment.id}
+                  year={text}
+                  circa={circa}
+                  title={shown.title}
+                  zh={shown.secondary}
                   meta={location}
-                  onTitle={() => onSelectPlace(place.id)}
-                  onEdit={() => onEditPlace(place)}
+                  onTitle={() => onSelectEstablishment(establishment.id)}
+                  onEdit={onEditEstablishment ? () => onEditEstablishment(establishment) : undefined}
                 />
               )
             })
@@ -137,59 +159,13 @@ export function SitePanel({
       </ol>
       )}
 
-      {site.lots.length > 0 && (
-        <section>
-          <h3>Parcels</h3>
-          <ul className="catalog catalog-plain">
-            {site.lots.map((lot) => {
-              const lines = formatLotSummary(lot)
-              return (
-                <li key={lot.number} className="catalog-row">
-                  <div className="catalog-name">
-                    <span>{lines[0]}</span>
-                    {lines.slice(1).map((line) => (
-                      <p key={line} className="muted">{line}</p>
-                    ))}
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-      )}
-
-      <section>
-        <h3>Records</h3>
-        {siteRecords.length === 0 ? (
-          <p className="muted">No records linked here</p>
-        ) : (
-          <ul className="catalog catalog-plain">
-            {siteRecords.map((record) => (
-              <li key={record.id} className="catalog-row">
-                <div className="catalog-name">
-                  <span>{record.title || 'Untitled record'}</span>
-                  {record.urls[0]?.url && (
-                    <p>
-                      <a href={record.urls[0].url} target="_blank" rel="noreferrer">
-                        {linkText(record.urls[0])}
-                      </a>
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <div className="row">
-        <button type="button" className="primary" onClick={onAddPlace}>
-          Add place
-        </button>
-        <button type="button" className="ghost" onClick={onAddRecord}>
-          Add record
-        </button>
-      </div>
+      {onAddEstablishment ? (
+        <div className="row">
+          <button type="button" className="primary" onClick={onAddEstablishment}>
+            {addLabel}
+          </button>
+        </div>
+      ) : null}
     </article>
   )
 }

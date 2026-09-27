@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { siteCluster } from './site'
-import type { LotSnapshot, Place } from './types'
+import type { LotSnapshot, Establishment } from './types'
 
 const now = '2026-01-01T00:00:00.000Z'
 
-function place(partial: Pick<Place, 'id' | 'geometry'> & Partial<Place>): Place {
+function establishment(partial: Pick<Establishment, 'id' | 'geometry'> & Partial<Establishment>): Establishment {
   return {
     names: [{ lang: 'en', text: partial.id, primary: true }],
     status: 'unknown',
@@ -39,14 +39,14 @@ function lot(number: string, west: number): LotSnapshot {
 
 describe('siteCluster', () => {
   it('groups places that share a lot number, newest first', () => {
-    const current = place({
+    const current = establishment({
       id: 'now',
       geometry: lot('IL 1', 114.15).geometry,
       lots: [lot('IL 1', 114.15)],
       status: 'standing',
       built: { year: 1980 },
     })
-    const previous = place({
+    const previous = establishment({
       id: 'then',
       geometry: lot('IL 1', 114.15).geometry,
       lots: [lot('IL 1', 114.15)],
@@ -54,7 +54,7 @@ describe('siteCluster', () => {
       built: { year: 1920 },
       demolished: { year: 1979 },
     })
-    const elsewhere = place({
+    const elsewhere = establishment({
       id: 'other',
       geometry: lot('IL 9', 114.2).geometry,
       lots: [lot('IL 9', 114.2)],
@@ -63,15 +63,15 @@ describe('siteCluster', () => {
   })
 
   it('groups identical nearby points without lots', () => {
-    const connaught = place({
+    const connaught = establishment({
       id: 'gpo-connaught',
       geometry: { type: 'Point', coordinates: [114.1578, 22.283] },
     })
-    const worldWide = place({
+    const worldWide = establishment({
       id: 'world-wide-house',
       geometry: { type: 'Point', coordinates: [114.1578, 22.283] },
     })
-    const queens = place({
+    const queens = establishment({
       id: 'gpo-queens-rd',
       geometry: { type: 'Point', coordinates: [114.158, 22.2813] },
     })
@@ -82,7 +82,7 @@ describe('siteCluster', () => {
   })
 
   it('does not group adjacent polygons that only sit next to each other', () => {
-    const west = place({
+    const west = establishment({
       id: 'a',
       geometry: {
         type: 'Polygon',
@@ -109,7 +109,7 @@ describe('siteCluster', () => {
         },
       }],
     })
-    const east = place({
+    const east = establishment({
       id: 'b',
       geometry: {
         type: 'Polygon',
@@ -141,21 +141,21 @@ describe('siteCluster', () => {
 
   it('does not chain a lot-sharing point out to nearby pins when nearbyPoints is off', () => {
     const parcel = lot('IL 1', 114.15)
-    const current = place({
+    const current = establishment({
       id: 'now',
       geometry: parcel.geometry,
       lots: [parcel],
       status: 'standing',
       built: { year: 1980 },
     })
-    const previous = place({
+    const previous = establishment({
       id: 'then',
       geometry: { type: 'Point', coordinates: [114.1504, 22.28015] },
       lots: [parcel],
       status: 'demolished',
       built: { year: 1911 },
     })
-    const stray = place({
+    const stray = establishment({
       id: 'stray',
       geometry: { type: 'Point', coordinates: [114.1504, 22.27995] },
       status: 'demolished',
@@ -168,13 +168,13 @@ describe('siteCluster', () => {
   })
 
   it('does not chain dense BDBIAR pins by proximity alone', () => {
-    const a = place({
+    const a = establishment({
       id: 'bdbiar-1',
       geometry: { type: 'Point', coordinates: [114.15, 22.28] },
       status: 'standing',
       customFields: [{ key: 'bdbiarId', value: '1' }],
     })
-    const b = place({
+    const b = establishment({
       id: 'bdbiar-2',
       geometry: { type: 'Point', coordinates: [114.15001, 22.28001] },
       status: 'standing',
@@ -184,11 +184,11 @@ describe('siteCluster', () => {
   })
 
   it('does not cluster an unlocated place by coordinates', () => {
-    const located = place({
+    const located = establishment({
       id: 'gpo',
       geometry: { type: 'Point', coordinates: [114.1578, 22.283] },
     })
-    const unlocated = place({
+    const unlocated = establishment({
       id: 'notes-only',
       geometry: null,
     })

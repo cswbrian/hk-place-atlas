@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local wrangler + catalog tiles
+.wrangler
+public/catalog.geojson
+.dev.vars

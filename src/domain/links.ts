@@ -1,32 +1,5 @@
 import type { Source } from './types'
 
-export type LinkDraft = {
-  label: string
-  url: string
-}
-
-function trimmed(value: string): string {
-  return value.trim()
-}
-
-export function normalizeSources(rows: LinkDraft[]): Source[] {
-  return rows.flatMap((row) => {
-    const label = trimmed(row.label)
-    const url = trimmed(row.url)
-    if (!label && !url) return []
-    return [{ ...(label ? { label } : {}), ...(url ? { url } : {}) }]
-  })
-}
-
-export function normalizeImages(rows: LinkDraft[]): Source[] {
-  return rows.flatMap((row) => {
-    const label = trimmed(row.label)
-    const url = trimmed(row.url)
-    if (!url) return []
-    return [{ ...(label ? { label } : {}), url }]
-  })
-}
-
 const MAX_LINK_TEXT = 56
 
 function compactUrl(url: string): string {

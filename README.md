@@ -1,27 +1,69 @@
 # HK Place Atlas
 
-Local-first map of Hong Kong building generations. Places live in IndexedDB.
+Bilingual public map of Hong Kong buildings, shops, and events.
+
+Live: [https://hkatlas.fyi/en](https://hkatlas.fyi/en) or `/zh-hk`.
+
+Living spec: [docs/superpowers/specs/2026-09-16-hk-scale-cloud-atlas.md](docs/superpowers/specs/2026-09-16-hk-scale-cloud-atlas.md)
 
 ## Use
 
+Node 22+ (`node:sqlite` for the seed).
+
 ```bash
 npm install
+npx wrangler d1 migrations apply hk-atlas --local
+npm run seed
 npm run dev
 ```
 
-1. Zoom into Central and Western — clean map in view mode (no dots or polygons).
-2. Click the map to open the **site panel**. If a building or parcel is under the click, that polygon is the location; otherwise the click is a pin.
-3. **Add place** from the site, or **Edit** an existing row. Click a place name for the read-only page.
-4. While editing, further map clicks attach another building or parcel (or keep the pin if nothing is there). A footprint already claimed by another place is borrowed as an outline, not taken.
-5. Same-site history is deduced from shared lots or nearby coordinates. Institution moves are still linked by hand.
-6. **Old maps** uploads a sheet you can drag, scale, and twist.
+Open [http://localhost:5173/en](http://localhost:5173/en) or `/zh-hk`. Use **Map | Places** in the header, or open `/en/places` for the directory. `npm run seed -- --sample 2000` is a smaller local catalog.
 
-Seed data includes the GPO chain from [Gwulo](https://gwulo.com/node/3034) plus Central and Western buildings from [BDBIAR](https://data.gov.hk) (converted into Places). CSDI footprints are claimed onto those Places when you zoom in.
+1. Clustered pins, no login.
+2. Pan and zoom — clusters split.
+3. Scrub the year slider.
+4. Click a pin — site panel (names, dates, notes, sources, edges).
+5. Click the map — nearby features in view.
+6. Switch English / 繁.
+7. Browse all places on `/en/places` (A–Z, search, paginated).
+8. Read-only — no Add or Edit without sign-in.
+
+`npm run seed` imports the full [BDBIAR_BDBIAR_converted.csv](BDBIAR_BDBIAR_converted.csv). Catalog GeoJSON is written to `public/catalog.geojson` (gitignored).
+
+## Deploy
+
+```bash
+npx wrangler d1 migrations apply hk-atlas --remote
+npm run seed -- --remote
+npm run deploy
+```
+
+Worker `hk-atlas` on custom domain [hkatlas.fyi](https://hkatlas.fyi) (and `www`), D1 `hk-atlas` (APAC). `workers.dev` redirects to the apex.
+
+After deploy, add `https://hkatlas.fyi/api/auth/callback` (and JS origin `https://hkatlas.fyi`) to the Google OAuth client used for wiki sign-in.
+
+D1 free tier has a daily row-write limit. Large seeds can exhaust it for the day (UTC midnight reset). Sign-in still works if the users-table upsert fails; wiki edits that write to D1 will need paid D1 or waiting until the limit resets.
+
+## Google Analytics + Search Console
+
+GA4 Measurement ID `G-NKVYYE1Y49` is set in `wrangler.jsonc` (`GA_MEASUREMENT_ID`). The Worker injects gtag on production HTML; SPA navigations send `page_path` pageviews.
+
+### Search Console setup
+
+1. Open [Google Search Console](https://search.google.com/search-console) with the same Google account that owns the GA4 property.
+2. Add property → **Domain** → `hkatlas.fyi`.
+3. Verify with the DNS TXT record on the Cloudflare zone **hkatlas.fyi** (DNS → TXT at `@`).
+4. Sitemaps → submit `https://hkatlas.fyi/sitemap.xml`.
+5. URL inspection → request indexing for `https://hkatlas.fyi/en` and `https://hkatlas.fyi/zh-hk`.
+6. Link GA4: Search Console → Settings → Associations, and GA4 Admin → Product links → Search Console.
+
+Fallback if DNS TXT is slow: URL-prefix property `https://hkatlas.fyi` verified via Google Analytics (gtag already on the homepage).
 
 ## Layout
 
-- `src/domain` — types, lots, site clustering, BDBIAR → Place, querySite, Records
-- `src/storage` — `PlaceStore`, IndexedDB, seed
-- `src/ui` — map, forms, CSDI/LandsD helpers
-
-Lot and building geometry are snapshots, not live LandsD/CSDI links.
+- `src/domain` — Feature, locale, catalog, site query, SEO
+- `scripts/bdbiar.ts` — one-time Buildings Department CSV import for `npm run seed`
+- `src/api` — Worker route parser + browser client
+- `worker` — API, SEO HTML, robots/sitemap/llms, domain redirects
+- `scripts/seed.ts` — CSV → D1 + GeoJSON
+- `src/AtlasApp.tsx` — MapLibre map + year slider + site panel

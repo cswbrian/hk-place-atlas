@@ -1,0 +1,807 @@
+import { parseApiRoute, type ApiRoute } from '../src/api/router'
+import { featureRowToFeature, featureToRow, parseBbox, type Bbox, type FeatureRow } from '../src/domain/featureQuery'
+import { featureStandingInYear, slugify } from '../src/domain/feature'
+import {
+  clearCookie,
+  cookieValue,
+  OAUTH_COOKIE,
+  readSession,
+  SESSION_COOKIE,
+  setCookie,
+  signSession,
+  type Session,
+} from '../src/domain/session'
+import { parseAuditRow, revertPlan } from '../src/domain/audit'
+import { SEARCH_FETCH, SEARCH_LIMIT, fts5Query, hanNeedle, mergeSearchIds } from '../src/domain/search'
+import {
+  clampPage,
+  letterSql,
+  OCCUPANCY_SQL,
+  parsePlacesListQuery,
+  placesListItemFromRow,
+  placesOrderSql,
+} from '../src/domain/placesQuery'
+import {
+  CSDI_WFS,
+  GIS_CACHE_SECONDS,
+  LANDSD_ROOT,
+  clampGisBbox,
+  csdiBuildingsUrl,
+  landsdParcelUrl,
+  landsdSearchUrl,
+  parseParcelKind,
+  parseSearchText,
+} from '../src/domain/gis'
+import { featurePublicPath } from '../src/domain/locale'
+import {
+  canonicalHostRedirect,
+  featureSeoHead,
+  gtagSnippet,
+  homeSeoHead,
+  injectSeoHead,
+  llmsTxt,
+  notFoundSeoHead,
+  parseSeoPath,
+  parseSitemapPath,
+  placesSeoHead,
+  robotsTxt,
+  rootPathRedirect,
+  sitemapIndexXml,
+  sitemapPageCount,
+  sitemapXml,
+  SITEMAP_FEATURE_PAGE,
+  type SeoPath,
+  type SitemapFeature,
+} from '../src/domain/seo'
+import {
+  applyWikiWrite,
+  checkIfMatch,
+  parseFeatureWrite,
+  rateLimitOk,
+  wikiCanDelete,
+  wikiSlug,
+} from '../src/domain/wiki'
+import { clampLotBbox, wgsToHk80 } from '../src/ui/lots/hk80'
+
+export type Env = {
+  DB: D1Database
+  ASSETS?: Fetcher
+  GOOGLE_CLIENT_ID?: string
+  GOOGLE_CLIENT_SECRET?: string
+  SESSION_SECRET?: string
+  PUBLIC_ORIGIN?: string
+  GA_MEASUREMENT_ID?: string
+}
+
+const LIST_CAP = 500
+const SESSION_DAYS = 30 * 24 * 3600
+
+function json(data: unknown, status = 200, headers?: HeadersInit): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...headers },
+  })
+}
+
+function html(body: string, status = 200): Response {
+  return new Response(body, {
+    status,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  })
+}
+
+async function spaShell(env: Env, request: Request): Promise<string> {
+  if (!env.ASSETS) return '<!doctype html><html><head></head><body><div id="root"></div></body></html>'
+  const asset = await env.ASSETS.fetch(new URL('/index.html', request.url))
+  return asset.text()
+}
+
+function gaId(request: Request, env: Env): string | undefined {
+  const url = new URL(request.url)
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return undefined
+  return env.GA_MEASUREMENT_ID
+}
+
+async function handleSeoPage(request: Request, env: Env, seo: SeoPath): Promise<Response> {
+  const origin = publicOrigin(request, env)
+  const shell = await spaShell(env, request)
+  const measurementId = gaId(request, env)
+  if (seo.type === 'home') return html(injectSeoHead(shell, homeSeoHead(origin, seo.locale), measurementId))
+  if (seo.type === 'places') {
+    if (!seo.slug) return html(injectSeoHead(shell, placesSeoHead(origin, seo.locale), measurementId))
+    const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(seo.slug).first<FeatureRow>()
+    if (!row) return html(injectSeoHead(shell, notFoundSeoHead(origin, seo.locale), measurementId), 404)
+    return html(injectSeoHead(shell, placesSeoHead(origin, seo.locale, featureRowToFeature(row)), measurementId))
+  }
+  const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(seo.slug).first<FeatureRow>()
+  if (!row) return html(injectSeoHead(shell, notFoundSeoHead(origin, seo.locale), measurementId), 404)
+  const feature = featureRowToFeature(row)
+  const group = feature.kind === 'event' ? 'event' : 'place'
+  if (group !== seo.group) {
+    return Response.redirect(`${origin}${featurePublicPath(seo.locale, feature.kind, feature.slug)}`, 301)
+  }
+  return html(injectSeoHead(shell, featureSeoHead(feature, origin, seo.locale), measurementId))
+}
+
+function publicOrigin(request: Request, env: Env): string {
+  const url = new URL(request.url)
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return 'http://localhost:5173'
+  return env.PUBLIC_ORIGIN || url.origin
+}
+
+function redirect(location: string, status = 301): Response {
+  return new Response(null, { status, headers: { location } })
+}
+
+function textPlain(body: string, contentType = 'text/plain; charset=utf-8'): Response {
+  return new Response(body, { status: 200, headers: { 'content-type': contentType } })
+}
+
+async function handleSitemap(env: Env, origin: string, pathname: string): Promise<Response | null> {
+  const parsed = parseSitemapPath(pathname)
+  if (!parsed) return null
+  const countRow = await env.DB.prepare('SELECT COUNT(*) AS n FROM features').first<{ n: number }>()
+  const featureCount = countRow?.n ?? 0
+  const pages = sitemapPageCount(featureCount)
+  if (parsed.type === 'index') {
+    if (pages === 1) {
+      const { results } = await env.DB.prepare(
+        'SELECT kind, slug FROM features ORDER BY slug LIMIT ?',
+      )
+        .bind(SITEMAP_FEATURE_PAGE)
+        .all<SitemapFeature>()
+      return textPlain(sitemapXml(origin, results ?? []), 'application/xml; charset=utf-8')
+    }
+    return textPlain(sitemapIndexXml(origin, pages), 'application/xml; charset=utf-8')
+  }
+  if (parsed.page < 0 || parsed.page >= pages) return json({ error: 'not found' }, 404)
+  const { results } = await env.DB.prepare(
+    'SELECT kind, slug FROM features ORDER BY slug LIMIT ? OFFSET ?',
+  )
+    .bind(SITEMAP_FEATURE_PAGE, parsed.page * SITEMAP_FEATURE_PAGE)
+    .all<SitemapFeature>()
+  return textPlain(
+    sitemapXml(origin, results ?? [], { includeHomes: parsed.page === 0 }),
+    'application/xml; charset=utf-8',
+  )
+}
+
+async function sessionFrom(request: Request, env: Env): Promise<Session | null> {
+  if (!env.SESSION_SECRET) return null
+  return readSession(cookieValue(request.headers.get('cookie'), SESSION_COOKIE), env.SESSION_SECRET)
+}
+
+async function requireSession(request: Request, env: Env): Promise<Session | Response> {
+  const session = await sessionFrom(request, env)
+  if (!session) return json({ error: 'unauthorized' }, 401)
+  return session
+}
+
+async function rateLimited(env: Env, sub: string): Promise<boolean> {
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const row = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM audit_log WHERE actor_sub = ? AND at >= ?',
+  )
+    .bind(sub, since)
+    .first<{ n: number }>()
+  return !rateLimitOk((row?.n ?? 0) + 1)
+}
+
+async function audit(
+  env: Env,
+  actor: Session,
+  action: string,
+  entityId: string,
+  before: unknown,
+  after: unknown,
+) {
+  await env.DB.prepare(
+    `INSERT INTO audit_log (id, at, actor_sub, actor_email, action, entity_type, entity_id, before_json, after_json)
+     VALUES (?, ?, ?, ?, ?, 'feature', ?, ?, ?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      new Date().toISOString(),
+      actor.sub,
+      actor.email,
+      action,
+      entityId,
+      before ? JSON.stringify(before) : null,
+      after ? JSON.stringify(after) : null,
+    )
+    .run()
+}
+
+async function upsertUser(env: Env, sub: string, email: string) {
+  await env.DB.prepare(
+    `INSERT INTO users (sub, email, created_at) VALUES (?, ?, ?)
+     ON CONFLICT(sub) DO UPDATE SET email = excluded.email`,
+  )
+    .bind(sub, email, new Date().toISOString())
+    .run()
+}
+
+async function saveFeatureRow(env: Env, feature: ReturnType<typeof featureToRow>, isNew: boolean) {
+  const values = [
+    feature.id,
+    feature.kind,
+    feature.slug,
+    feature.name_en,
+    feature.name_zh,
+    feature.status,
+    feature.start_year,
+    feature.start_month,
+    feature.start_day,
+    feature.start_circa,
+    feature.end_year,
+    feature.end_month,
+    feature.end_day,
+    feature.end_circa,
+    feature.lng,
+    feature.lat,
+    feature.body,
+    feature.touched,
+    feature.created_at,
+    feature.updated_at,
+    feature.created_by,
+    feature.updated_by,
+  ]
+  if (isNew) {
+    await env.DB.prepare(
+      `INSERT INTO features (
+        id, kind, slug, name_en, name_zh, status,
+        start_year, start_month, start_day, start_circa,
+        end_year, end_month, end_day, end_circa,
+        lng, lat, body, touched, created_at, updated_at, created_by, updated_by
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    )
+      .bind(...values)
+      .run()
+    return
+  }
+  await env.DB.prepare(
+    `UPDATE features SET
+      kind=?, slug=?, name_en=?, name_zh=?, status=?,
+      start_year=?, start_month=?, start_day=?, start_circa=?,
+      end_year=?, end_month=?, end_day=?, end_circa=?,
+      lng=?, lat=?, body=?, touched=?, updated_at=?, updated_by=?
+     WHERE id=?`,
+  )
+    .bind(
+      feature.kind,
+      feature.slug,
+      feature.name_en,
+      feature.name_zh,
+      feature.status,
+      feature.start_year,
+      feature.start_month,
+      feature.start_day,
+      feature.start_circa,
+      feature.end_year,
+      feature.end_month,
+      feature.end_day,
+      feature.end_circa,
+      feature.lng,
+      feature.lat,
+      feature.body,
+      feature.touched,
+      feature.updated_at,
+      feature.updated_by,
+      feature.id,
+    )
+    .run()
+}
+
+async function listInBbox(request: Request, env: Env, touchedOnly: boolean): Promise<Response> {
+  const url = new URL(request.url)
+  const bbox = parseBbox(url.searchParams.get('bbox'))
+  if (!bbox) return json({ error: 'bbox is required' }, 400)
+  const year = Number(url.searchParams.get('year'))
+  const kind = url.searchParams.get('kind')
+  const now = new Date().getFullYear()
+  let sql = 'SELECT * FROM features WHERE lng >= ? AND lng <= ? AND lat >= ? AND lat <= ?'
+  const binds: (string | number)[] = [bbox.west, bbox.east, bbox.south, bbox.north]
+  if (touchedOnly) sql += ' AND touched = 1'
+  if (kind) {
+    sql += ' AND kind = ?'
+    binds.push(kind)
+  }
+  sql += ' LIMIT ?'
+  binds.push(LIST_CAP)
+  const { results } = await env.DB.prepare(sql).bind(...binds).all<FeatureRow>()
+  const features = (results ?? []).map(featureRowToFeature)
+  const filtered = Number.isInteger(year)
+    ? features.filter((feature) => featureStandingInYear(feature, year, now))
+    : features
+  return json(filtered)
+}
+
+async function handleAuthGoogle(request: Request, env: Env): Promise<Response> {
+  if (!env.GOOGLE_CLIENT_ID || !env.SESSION_SECRET) return json({ error: 'auth not configured' }, 503)
+  const url = new URL(request.url)
+  const returnTo = url.searchParams.get('return') || '/en'
+  const nonce = crypto.randomUUID()
+  const origin = publicOrigin(request, env)
+  const redirectUri = `${origin}/api/auth/callback`
+  const state = await signSession(
+    { sub: nonce, email: returnTo, exp: Math.floor(Date.now() / 1000) + 600 },
+    env.SESSION_SECRET,
+  )
+  const google = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  google.searchParams.set('client_id', env.GOOGLE_CLIENT_ID)
+  google.searchParams.set('redirect_uri', redirectUri)
+  google.searchParams.set('response_type', 'code')
+  google.searchParams.set('scope', 'openid email profile')
+  google.searchParams.set('state', state)
+  google.searchParams.set('prompt', 'select_account')
+  const secure = origin.startsWith('https:')
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location: google.toString(),
+      'set-cookie': setCookie(OAUTH_COOKIE, nonce, 600, secure),
+    },
+  })
+}
+
+async function handleAuthCallback(request: Request, env: Env): Promise<Response> {
+  const origin = publicOrigin(request, env)
+  const secure = origin.startsWith('https:')
+  const fail = () =>
+    new Response(null, {
+      status: 302,
+      headers: { location: `${origin}/en`, 'set-cookie': clearCookie(OAUTH_COOKIE, secure) },
+    })
+  try {
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.SESSION_SECRET) return fail()
+    const url = new URL(request.url)
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    const nonce = cookieValue(request.headers.get('cookie'), OAUTH_COOKIE)
+    const parsed = await readSession(state, env.SESSION_SECRET)
+    if (!code || !parsed || !nonce || parsed.sub !== nonce) return fail()
+    const redirectUri = `${origin}/api/auth/callback`
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    })
+    if (!tokenRes.ok) return fail()
+    const tokens = (await tokenRes.json()) as { access_token?: string }
+    if (!tokens.access_token) return fail()
+    const userRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    })
+    if (!userRes.ok) return fail()
+    const profile = (await userRes.json()) as { sub?: string; email?: string }
+    if (!profile.sub || !profile.email) return fail()
+    try {
+      await upsertUser(env, profile.sub, profile.email)
+    } catch (error) {
+      console.error('upsertUser failed', error)
+    }
+    const session = await signSession(
+      { sub: profile.sub, email: profile.email, exp: Math.floor(Date.now() / 1000) + SESSION_DAYS },
+      env.SESSION_SECRET,
+    )
+    const headers = new Headers({ location: parsed.email.startsWith('/') ? parsed.email : `/${parsed.email}` })
+    headers.append('set-cookie', clearCookie(OAUTH_COOKIE, secure))
+    headers.append('set-cookie', setCookie(SESSION_COOKIE, session, SESSION_DAYS, secure))
+    return new Response(null, { status: 302, headers })
+  } catch (error) {
+    console.error('auth callback failed', error)
+    return fail()
+  }
+}
+
+async function handleWrite(request: Request, env: Env, slug: string | null): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  let payload: unknown
+  try {
+    payload = await request.json()
+  } catch {
+    return json({ error: 'invalid body' }, 400)
+  }
+  const write = parseFeatureWrite(payload)
+  if ('error' in write) return json({ error: write.error }, 400)
+  const now = new Date().toISOString()
+  if (slug) {
+    const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(slug).first<FeatureRow>()
+    if (!row) return json({ error: 'not found' }, 404)
+    const existing = featureRowToFeature(row)
+    const match = checkIfMatch(existing.updatedAt, request.headers.get('If-Match'))
+    if (match === 'missing') return json({ error: 'If-Match required' }, 428)
+    if (match === 'conflict') return json({ error: 'conflict' }, 412)
+    const feature = applyWikiWrite(existing, write, session, existing.id, existing.slug, now)
+    await saveFeatureRow(env, featureToRow(feature), false)
+    await audit(env, session, 'put', feature.id, existing, feature)
+    return json(feature)
+  }
+  const { results } = await env.DB.prepare('SELECT slug FROM features WHERE slug = ? OR slug LIKE ?')
+    .bind(slugify(write.nameEn, write.start?.year), `${slugify(write.nameEn, write.start?.year)}-%`)
+    .all<{ slug: string }>()
+  const used = new Set((results ?? []).map((item) => item.slug))
+  const nextSlug = wikiSlug(write.nameEn, write.start?.year, used)
+  const feature = applyWikiWrite(null, write, session, `wiki-${crypto.randomUUID()}`, nextSlug, now)
+  await saveFeatureRow(env, featureToRow(feature), true)
+  await audit(env, session, 'put', feature.id, null, feature)
+  return json(feature, 201)
+}
+
+async function handleDelete(request: Request, env: Env, slug: string): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(slug).first<FeatureRow>()
+  if (!row) return json({ error: 'not found' }, 404)
+  const existing = featureRowToFeature(row)
+  if (!wikiCanDelete(existing.id)) return json({ error: 'seed rows cannot be deleted' }, 403)
+  const match = checkIfMatch(existing.updatedAt, request.headers.get('If-Match'))
+  if (match === 'missing') return json({ error: 'If-Match required' }, 428)
+  if (match === 'conflict') return json({ error: 'conflict' }, 412)
+  await env.DB.prepare('DELETE FROM features WHERE id = ?').bind(existing.id).run()
+  await audit(env, session, 'delete', existing.id, existing, null)
+  return json({ ok: true })
+}
+
+async function handleAuditList(env: Env, featureId: string): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, at, actor_email, action, entity_id, before_json, after_json
+     FROM audit_log WHERE entity_type = 'feature' AND entity_id = ?
+     ORDER BY at DESC LIMIT 50`,
+  )
+    .bind(featureId)
+    .all()
+  const entries = (results ?? []).flatMap((row) => {
+    const parsed = parseAuditRow(row)
+    return 'error' in parsed ? [] : [parsed]
+  })
+  return json(entries)
+}
+
+async function handleAuditRevert(request: Request, env: Env, id: string): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  const row = await env.DB.prepare('SELECT * FROM audit_log WHERE id = ?').bind(id).first()
+  if (!row) return json({ error: 'not found' }, 404)
+  const parsed = parseAuditRow(row)
+  if ('error' in parsed) return json({ error: parsed.error }, 400)
+  const plan = revertPlan(parsed)
+  if ('error' in plan) return json({ error: plan.error }, plan.error.includes('seed') ? 403 : 400)
+  const now = new Date().toISOString()
+  const current = await env.DB.prepare('SELECT * FROM features WHERE id = ?')
+    .bind(plan.feature.id)
+    .first<FeatureRow>()
+  if (plan.type === 'delete') {
+    if (!current) return json({ deleted: true })
+    const existing = featureRowToFeature(current)
+    const match = checkIfMatch(existing.updatedAt, request.headers.get('If-Match'))
+    if (match === 'missing') return json({ error: 'If-Match required' }, 428)
+    if (match === 'conflict') return json({ error: 'conflict' }, 412)
+    await env.DB.prepare('DELETE FROM features WHERE id = ?').bind(existing.id).run()
+    await audit(env, session, 'revert', existing.id, existing, null)
+    return json({ deleted: true })
+  }
+  const restored = { ...plan.feature, updatedAt: now, updatedBy: session.sub }
+  if (current) {
+    const existing = featureRowToFeature(current)
+    const match = checkIfMatch(existing.updatedAt, request.headers.get('If-Match'))
+    if (match === 'missing') return json({ error: 'If-Match required' }, 428)
+    if (match === 'conflict') return json({ error: 'conflict' }, 412)
+    await saveFeatureRow(env, featureToRow(restored), false)
+    await audit(env, session, 'revert', restored.id, existing, restored)
+  } else {
+    await saveFeatureRow(env, featureToRow(restored), true)
+    await audit(env, session, 'revert', restored.id, null, restored)
+  }
+  return json(restored)
+}
+
+function likePattern(needle: string): string {
+  return `%${needle.replaceAll('%', '').replaceAll('_', '')}%`
+}
+
+async function handleSearch(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const raw = url.searchParams.get('q') ?? ''
+  const fts = fts5Query(raw)
+  const han = hanNeedle(raw)
+  if (!fts && !han) return json([])
+  const year = Number(url.searchParams.get('year'))
+  const kind = url.searchParams.get('kind')
+  const now = new Date().getFullYear()
+
+  const ftsIds: string[] = []
+  if (fts) {
+    const sql = kind
+      ? `SELECT features.id AS id FROM features_fts JOIN features ON features.id = features_fts.id
+         WHERE features_fts MATCH ? AND features.kind = ? ORDER BY rank LIMIT ?`
+      : `SELECT features.id AS id FROM features_fts JOIN features ON features.id = features_fts.id
+         WHERE features_fts MATCH ? ORDER BY rank LIMIT ?`
+    const binds = kind ? [fts, kind, SEARCH_FETCH] : [fts, SEARCH_FETCH]
+    try {
+      const { results } = await env.DB.prepare(sql).bind(...binds).all<{ id: string }>()
+      for (const row of results ?? []) ftsIds.push(row.id)
+    } catch {
+      /* index missing or MATCH rejected */
+    }
+  }
+
+  const hanIds: string[] = []
+  if (han) {
+    const like = likePattern(han)
+    const sql = kind
+      ? 'SELECT id FROM features WHERE (name_zh LIKE ? OR name_en LIKE ?) AND kind = ? LIMIT ?'
+      : 'SELECT id FROM features WHERE name_zh LIKE ? OR name_en LIKE ? LIMIT ?'
+    const binds = kind ? [like, like, kind, SEARCH_FETCH] : [like, like, SEARCH_FETCH]
+    const { results } = await env.DB.prepare(sql).bind(...binds).all<{ id: string }>()
+    for (const row of results ?? []) hanIds.push(row.id)
+  }
+
+  const ids = mergeSearchIds(ftsIds, hanIds, SEARCH_FETCH)
+  if (!ids.length) return json([])
+  const placeholders = ids.map(() => '?').join(',')
+  const { results } = await env.DB.prepare(`SELECT * FROM features WHERE id IN (${placeholders})`).bind(...ids).all<FeatureRow>()
+  const byId = new Map((results ?? []).map((row) => [row.id, featureRowToFeature(row)]))
+  let features = ids.flatMap((id) => {
+    const feature = byId.get(id)
+    return feature ? [feature] : []
+  })
+  if (Number.isInteger(year)) {
+    features = features.filter((feature) => featureStandingInYear(feature, year, now))
+  }
+  return json(features.slice(0, SEARCH_LIMIT))
+}
+
+type PlacesListRow = {
+  slug: string
+  kind: string
+  name_en: string
+  name_zh: string
+  status: string
+  start_year: number | null
+  end_year: number | null
+}
+
+const PLACES_SEARCH_CAP = 100_000
+
+async function handlePlacesList(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const query = parsePlacesListQuery(
+    url.searchParams,
+    url.searchParams.get('locale') === 'zh-hk' ? 'zh-hk' : 'en',
+  )
+  const { pageSize, letter, q, locale } = query
+
+  if (q) {
+    const fts = fts5Query(q)
+    const han = hanNeedle(q)
+    if (!fts && !han) {
+      return json({ page: 1, pageSize, total: 0, features: [] })
+    }
+
+    const ftsIds: string[] = []
+    if (fts) {
+      const sql = `SELECT features.id AS id FROM features_fts JOIN features ON features.id = features_fts.id
+         WHERE features_fts MATCH ? AND ${OCCUPANCY_SQL} ORDER BY rank LIMIT ?`
+      try {
+        const { results } = await env.DB.prepare(sql).bind(fts, PLACES_SEARCH_CAP).all<{ id: string }>()
+        for (const row of results ?? []) ftsIds.push(row.id)
+      } catch {
+        /* index missing or MATCH rejected */
+      }
+    }
+
+    const hanIds: string[] = []
+    if (han) {
+      const like = likePattern(han)
+      const sql = `SELECT id FROM features WHERE (name_zh LIKE ? OR name_en LIKE ?) AND ${OCCUPANCY_SQL} LIMIT ?`
+      const { results } = await env.DB.prepare(sql).bind(like, like, PLACES_SEARCH_CAP).all<{ id: string }>()
+      for (const row of results ?? []) hanIds.push(row.id)
+    }
+
+    const ids = mergeSearchIds(ftsIds, hanIds, PLACES_SEARCH_CAP)
+    const total = ids.length
+    const page = clampPage(query.page, total, pageSize)
+    if (!ids.length) return json({ page, pageSize, total: 0, features: [] })
+
+    const offset = (page - 1) * pageSize
+    const pageIds = ids.slice(offset, offset + pageSize)
+    if (!pageIds.length) return json({ page, pageSize, total, features: [] })
+
+    const placeholders = pageIds.map(() => '?').join(',')
+    const { results } = await env.DB.prepare(
+      `SELECT id, slug, kind, name_en, name_zh, status, start_year, end_year FROM features WHERE id IN (${placeholders})`,
+    )
+      .bind(...pageIds)
+      .all<PlacesListRow & { id: string }>()
+    const byId = new Map((results ?? []).map((row) => [row.id, row]))
+    const features = pageIds.flatMap((id) => {
+      const row = byId.get(id)
+      return row ? [placesListItemFromRow(row)] : []
+    })
+    return json({ page, pageSize, total, features })
+  }
+
+  const letterFilter = letterSql(letter)
+  const whereParts = [OCCUPANCY_SQL]
+  const binds: string[] = []
+  if (letterFilter) {
+    whereParts.push(letterFilter.sql)
+    binds.push(...letterFilter.binds)
+  }
+  const where = whereParts.join(' AND ')
+  const countRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM features WHERE ${where}`)
+    .bind(...binds)
+    .first<{ n: number }>()
+  const total = countRow?.n ?? 0
+  const page = clampPage(query.page, total, pageSize)
+  const offset = (page - 1) * pageSize
+  const order = placesOrderSql(locale)
+  const { results } = await env.DB.prepare(
+    `SELECT slug, kind, name_en, name_zh, status, start_year, end_year FROM features
+     WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
+  )
+    .bind(...binds, pageSize, offset)
+    .all<PlacesListRow>()
+  return json({
+    page,
+    pageSize,
+    total,
+    features: (results ?? []).map(placesListItemFromRow),
+  })
+}
+
+function hk80FromWgs(bbox: Bbox): [number, number, number, number] {
+  const [minX, minY] = wgsToHk80(bbox.west, bbox.south)
+  const [maxX, maxY] = wgsToHk80(bbox.east, bbox.north)
+  return clampLotBbox(
+    Math.min(minX, maxX),
+    Math.min(minY, maxY),
+    Math.max(minX, maxX),
+    Math.max(minY, maxY),
+  )
+}
+
+function gisUpstream(route: ApiRoute, url: URL): string | null {
+  if (route.type === 'gisBuildings') {
+    const parsed = parseBbox(url.searchParams.get('bbox'))
+    const bbox = parsed ? clampGisBbox(parsed) : null
+    return bbox ? csdiBuildingsUrl(bbox) : null
+  }
+  if (route.type === 'gisParcels') {
+    const kind = parseParcelKind(url.searchParams.get('kind'))
+    const parsed = parseBbox(url.searchParams.get('bbox'))
+    const bbox = parsed ? clampGisBbox(parsed) : null
+    return kind && bbox ? landsdParcelUrl(kind, hk80FromWgs(bbox)) : null
+  }
+  if (route.type === 'gisParcelSearch') {
+    const kind = parseParcelKind(url.searchParams.get('kind'))
+    const text = parseSearchText(url.searchParams.get('q'))
+    return kind && text ? landsdSearchUrl(kind, text) : null
+  }
+  return null
+}
+
+function gisAllowlisted(upstream: string): boolean {
+  return upstream.startsWith(`${CSDI_WFS}?`) || upstream.startsWith(`${LANDSD_ROOT}/gs/api/v1.0.0/`)
+}
+
+async function handleGis(request: Request, route: ApiRoute, ctx: ExecutionContext): Promise<Response> {
+  const url = new URL(request.url)
+  const upstream = gisUpstream(route, url)
+  if (!upstream || !gisAllowlisted(upstream)) return json({ error: 'invalid gis query' }, 400)
+  const cache = caches.default
+  const cacheUrl = new URL(request.url)
+  cacheUrl.searchParams.sort()
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
+  const hit = await cache.match(cacheKey)
+  if (hit) return hit
+  const upstreamResponse = await fetch(upstream, {
+    headers: { 'user-agent': 'hk-atlas/1.0' },
+  })
+  const headers = new Headers()
+  const contentType = upstreamResponse.headers.get('content-type')
+  if (contentType) headers.set('content-type', contentType)
+  headers.set('cache-control', `public, max-age=${GIS_CACHE_SECONDS}`)
+  const response = new Response(upstreamResponse.body, {
+    status: upstreamResponse.status,
+    statusText: upstreamResponse.statusText,
+    headers,
+  })
+  if (upstreamResponse.ok) ctx.waitUntil(cache.put(cacheKey, response.clone()))
+  return response
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url)
+    const origin = publicOrigin(request, env)
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      const hostRedirect = canonicalHostRedirect(request.url, origin)
+      if (hostRedirect) return redirect(hostRedirect)
+      const rootRedirect = rootPathRedirect(url.pathname, origin)
+      if (rootRedirect) return redirect(rootRedirect)
+      if (url.pathname === '/robots.txt') return textPlain(robotsTxt(origin))
+      if (url.pathname === '/llms.txt') return textPlain(llmsTxt(origin))
+      const sitemap = await handleSitemap(env, origin, url.pathname)
+      if (sitemap) return sitemap
+    }
+    const route = parseApiRoute(url)
+    if (!route) {
+      if (request.method === 'GET' || request.method === 'HEAD') {
+        const seo = parseSeoPath(url.pathname)
+        if (seo) return handleSeoPage(request, env, seo)
+      }
+      if (env.ASSETS) {
+        const asset = await env.ASSETS.fetch(request)
+        const measurementId = gaId(request, env)
+        if (!measurementId || !asset.headers.get('content-type')?.includes('text/html')) return asset
+        const body = await asset.text()
+        if (body.includes('googletagmanager.com/gtag')) return html(body, asset.status)
+        return html(body.replace('</head>', `${gtagSnippet(measurementId)}</head>`), asset.status)
+      }
+      return json({ error: 'not found' }, 404)
+    }
+
+    if (route.type === 'authGoogle' && request.method === 'GET') return handleAuthGoogle(request, env)
+    if (route.type === 'authCallback' && request.method === 'GET') return handleAuthCallback(request, env)
+    if (route.type === 'authLogout' && (request.method === 'GET' || request.method === 'POST')) {
+      const origin = publicOrigin(request, env)
+      const secure = origin.startsWith('https:')
+      const returnTo = url.searchParams.get('return') || '/en'
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: returnTo.startsWith('/') ? returnTo : '/en',
+          'set-cookie': clearCookie(SESSION_COOKIE, secure),
+        },
+      })
+    }
+    if (route.type === 'me' && request.method === 'GET') {
+      const session = await sessionFrom(request, env)
+      return json({
+        user: session ? { sub: session.sub, email: session.email } : null,
+        auth: Boolean(env.GOOGLE_CLIENT_ID && env.SESSION_SECRET),
+      })
+    }
+    if (route.type === 'overlay' && request.method === 'GET') return listInBbox(request, env, true)
+    if (route.type === 'search' && request.method === 'GET') return handleSearch(request, env)
+    if (route.type === 'places' && request.method === 'GET') return handlePlacesList(request, env)
+    if (route.type === 'audit' && request.method === 'GET') return handleAuditList(env, route.featureId)
+    if (route.type === 'auditRevert' && request.method === 'POST') return handleAuditRevert(request, env, route.id)
+    if (route.type === 'list' && request.method === 'GET') return listInBbox(request, env, false)
+    if (route.type === 'list' && request.method === 'PUT') return handleWrite(request, env, null)
+    if (route.type === 'feature' && request.method === 'GET') {
+      const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(route.slug).first<FeatureRow>()
+      if (!row) return json({ error: 'not found' }, 404)
+      return json(featureRowToFeature(row))
+    }
+    if (route.type === 'feature' && request.method === 'PUT') return handleWrite(request, env, route.slug)
+    if (route.type === 'feature' && request.method === 'DELETE') return handleDelete(request, env, route.slug)
+    if (route.type === 'edges' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM edges WHERE (from_id = ? AND from_type != 'csdi_building') OR (to_id = ? AND to_type != 'csdi_building')`,
+      )
+        .bind(route.featureId, route.featureId)
+        .all()
+      return json(results ?? [])
+    }
+    if (
+      (route.type === 'gisBuildings' || route.type === 'gisParcels' || route.type === 'gisParcelSearch')
+      && request.method === 'GET'
+    ) {
+      return handleGis(request, route, ctx)
+    }
+    return json({ error: 'method not allowed' }, 405)
+  },
+}

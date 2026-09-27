@@ -1,4 +1,4 @@
-import type { Place, PlaceGeometry } from './types'
+import type { Establishment, EstablishmentGeometry } from './types'
 
 const NEARBY_METERS = 25
 
@@ -8,20 +8,20 @@ export type SiteClusterOptions = {
 }
 
 export function siteCluster(
-  places: Place[],
-  placeId: string,
+  establishments: Establishment[],
+  establishmentId: string,
   options?: SiteClusterOptions,
 ): string[] {
   const nearbyPoints = options?.nearbyPoints !== false
-  const byId = new Map(places.map((place) => [place.id, place]))
-  const start = byId.get(placeId)
-  if (!start) return [placeId]
-  const seen = new Set<string>([placeId])
+  const byId = new Map(establishments.map((establishment) => [establishment.id, establishment]))
+  const start = byId.get(establishmentId)
+  if (!start) return [establishmentId]
+  const seen = new Set<string>([establishmentId])
   const queue = [start]
   while (queue.length > 0) {
     const current = queue.shift()
     if (!current) break
-    for (const other of places) {
+    for (const other of establishments) {
       if (seen.has(other.id)) continue
       if (!sameSite(current, other, nearbyPoints)) continue
       seen.add(other.id)
@@ -30,12 +30,12 @@ export function siteCluster(
   }
   return [...seen]
     .map((id) => byId.get(id))
-    .filter((place): place is Place => Boolean(place))
+    .filter((establishment): establishment is Establishment => Boolean(establishment))
     .sort(compareSiteOrder)
-    .map((place) => place.id)
+    .map((establishment) => establishment.id)
 }
 
-export function compareSiteOrder(a: Place, b: Place): number {
+export function compareSiteOrder(a: Establishment, b: Establishment): number {
   const built = (b.built?.year ?? 9999) - (a.built?.year ?? 9999)
   if (built !== 0) return built
   const demolished = (b.demolished?.year ?? 9999) - (a.demolished?.year ?? 9999)
@@ -43,7 +43,7 @@ export function compareSiteOrder(a: Place, b: Place): number {
   return a.id.localeCompare(b.id)
 }
 
-function sameSite(a: Place, b: Place, nearbyPoints: boolean): boolean {
+function sameSite(a: Establishment, b: Establishment, nearbyPoints: boolean): boolean {
   if (sharedLot(a, b)) return true
   if (!a.geometry || !b.geometry) return false
   if (geometryContainsPoint(b.geometry, geometryCentroid(a.geometry))) return true
@@ -57,20 +57,20 @@ function sameSite(a: Place, b: Place, nearbyPoints: boolean): boolean {
   return false
 }
 
-function isBdbiarPin(place: Place): boolean {
-  if (!place.customFields.some((field) => field.key === 'bdbiarId')) return false
-  if ((place.lots ?? []).length > 0) return false
-  if ((place.buildings ?? []).length > 0) return false
-  return place.geometry?.type === 'Point'
+function isBdbiarPin(establishment: Establishment): boolean {
+  if (!establishment.customFields.some((field) => field.key === 'bdbiarId')) return false
+  if ((establishment.lots ?? []).length > 0) return false
+  if ((establishment.buildings ?? []).length > 0) return false
+  return establishment.geometry?.type === 'Point'
 }
 
-function sharedLot(a: Place, b: Place): boolean {
+function sharedLot(a: Establishment, b: Establishment): boolean {
   const left = new Set((a.lots ?? []).map((lot) => lot.number))
   if (left.size === 0) return false
   return (b.lots ?? []).some((lot) => left.has(lot.number))
 }
 
-function geometryCentroid(geometry: PlaceGeometry): [number, number] {
+function geometryCentroid(geometry: EstablishmentGeometry): [number, number] {
   const ring = firstRing(geometry)
   if (ring.length === 0) return [0, 0]
   const sum = ring.reduce<[number, number]>(
@@ -80,13 +80,13 @@ function geometryCentroid(geometry: PlaceGeometry): [number, number] {
   return [sum[0] / ring.length, sum[1] / ring.length]
 }
 
-function firstRing(geometry: PlaceGeometry): number[][] {
+function firstRing(geometry: EstablishmentGeometry): number[][] {
   if (geometry.type === 'Point') return [geometry.coordinates]
   if (geometry.type === 'Polygon') return geometry.coordinates[0] ?? []
   return geometry.coordinates[0]?.[0] ?? []
 }
 
-export function geometryContainsPoint(geometry: PlaceGeometry, point: [number, number]): boolean {
+export function geometryContainsPoint(geometry: EstablishmentGeometry, point: [number, number]): boolean {
   if (geometry.type === 'Point') return false
   const rings =
     geometry.type === 'Polygon'

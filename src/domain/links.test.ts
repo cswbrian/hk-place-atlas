@@ -1,42 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkText, normalizeImages, normalizeSources } from './links'
-
-describe('normalizeSources', () => {
-  it('keeps a source that has only a URL', () => {
-    expect(normalizeSources([{ label: '', url: 'https://gwulo.com/node/6156' }])).toEqual([
-      { url: 'https://gwulo.com/node/6156' },
-    ])
-  })
-
-  it('keeps a source that has only a label', () => {
-    expect(normalizeSources([{ label: 'Gwulo 6156', url: '' }])).toEqual([{ label: 'Gwulo 6156' }])
-  })
-
-  it('keeps multiple sources and drops empty rows', () => {
-    expect(
-      normalizeSources([
-        { label: 'Gwulo', url: 'https://gwulo.com/node/6156' },
-        { label: '  ', url: '  ' },
-        { label: '', url: 'https://example.com/post' },
-      ]),
-    ).toEqual([
-      { label: 'Gwulo', url: 'https://gwulo.com/node/6156' },
-      { url: 'https://example.com/post' },
-    ])
-  })
-})
-
-describe('normalizeImages', () => {
-  it('keeps an image that has only a URL', () => {
-    expect(normalizeImages([{ label: '', url: 'https://www.facebook.com/posts/1' }])).toEqual([
-      { url: 'https://www.facebook.com/posts/1' },
-    ])
-  })
-
-  it('drops an image with no URL even if it has a label', () => {
-    expect(normalizeImages([{ label: 'Album', url: '' }])).toEqual([])
-  })
-})
+import { linkText } from './links'
 
 describe('linkText', () => {
   it('uses the label when present', () => {
