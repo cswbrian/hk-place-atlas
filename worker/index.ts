@@ -13,6 +13,7 @@ import {
 } from '../src/domain/session'
 import { parseAuditRow, revertPlan } from '../src/domain/audit'
 import { SEARCH_FETCH, SEARCH_LIMIT, fts5Query, hanNeedle, mergeSearchIds } from '../src/domain/search'
+import { placesFilterSql } from '../src/domain/placesFilters'
 import {
   clampPage,
   letterSql,
@@ -580,7 +581,9 @@ async function handlePlacesList(request: Request, env: Env): Promise<Response> {
     url.searchParams,
     url.searchParams.get('locale') === 'zh-hk' ? 'zh-hk' : 'en',
   )
-  const { pageSize, letter, q, locale } = query
+  const { pageSize, letter, q, region, district, decade, locale } = query
+  const filter = placesFilterSql({ region, district, decade })
+  const filterSql = filter.sql ? ` AND ${filter.sql}` : ''
 
   if (q) {
     const fts = fts5Query(q)
@@ -592,9 +595,9 @@ async function handlePlacesList(request: Request, env: Env): Promise<Response> {
     const ftsIds: string[] = []
     if (fts) {
       const sql = `SELECT features.id AS id FROM features_fts JOIN features ON features.id = features_fts.id
-         WHERE features_fts MATCH ? AND ${OCCUPANCY_SQL} ORDER BY rank LIMIT ?`
+         WHERE features_fts MATCH ? AND ${OCCUPANCY_SQL}${filterSql} ORDER BY rank LIMIT ?`
       try {
-        const { results } = await env.DB.prepare(sql).bind(fts, PLACES_SEARCH_CAP).all<{ id: string }>()
+        const { results } = await env.DB.prepare(sql).bind(fts, ...filter.binds, PLACES_SEARCH_CAP).all<{ id: string }>()
         for (const row of results ?? []) ftsIds.push(row.id)
       } catch {
         /* index missing or MATCH rejected */
@@ -604,8 +607,8 @@ async function handlePlacesList(request: Request, env: Env): Promise<Response> {
     const hanIds: string[] = []
     if (han) {
       const like = likePattern(han)
-      const sql = `SELECT id FROM features WHERE (name_zh LIKE ? OR name_en LIKE ?) AND ${OCCUPANCY_SQL} LIMIT ?`
-      const { results } = await env.DB.prepare(sql).bind(like, like, PLACES_SEARCH_CAP).all<{ id: string }>()
+      const sql = `SELECT id FROM features WHERE (name_zh LIKE ? OR name_en LIKE ?) AND ${OCCUPANCY_SQL}${filterSql} LIMIT ?`
+      const { results } = await env.DB.prepare(sql).bind(like, like, ...filter.binds, PLACES_SEARCH_CAP).all<{ id: string }>()
       for (const row of results ?? []) hanIds.push(row.id)
     }
 
@@ -634,10 +637,14 @@ async function handlePlacesList(request: Request, env: Env): Promise<Response> {
 
   const letterFilter = letterSql(letter)
   const whereParts = [OCCUPANCY_SQL]
-  const binds: string[] = []
+  const binds: (string | number)[] = []
   if (letterFilter) {
     whereParts.push(letterFilter.sql)
     binds.push(...letterFilter.binds)
+  }
+  if (filter.sql) {
+    whereParts.push(filter.sql)
+    binds.push(...filter.binds)
   }
   const where = whereParts.join(' AND ')
   const countRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM features WHERE ${where}`)

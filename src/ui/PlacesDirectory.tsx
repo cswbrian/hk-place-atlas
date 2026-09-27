@@ -2,10 +2,23 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchFeatureBySlug, fetchPlaces } from '../api/features'
 import { featureAsEstablishment, type Feature } from '../domain/feature'
 import { copy, displayNames, type SiteLocale } from '../domain/locale'
+import {
+  PLACE_DECADES,
+  PLACE_REGIONS,
+  placeChipLabel,
+  placeFilterGroupLabel,
+} from '../domain/placesFilters'
 import type { PlacesListItem, PlacesListResponse } from '../domain/placesQuery'
 import { EstablishmentDetail } from './EstablishmentDetail'
 
-type Browse = { page: number; letter: string | null; q: string | null }
+type Browse = {
+  page: number
+  letter: string | null
+  q: string | null
+  region: string | null
+  district: string | null
+  decade: number | null
+}
 
 type Props = {
   locale: SiteLocale
@@ -35,6 +48,8 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
   const [detailLoading, setDetailLoading] = useState(false)
   const onBrowseRef = useRef(onBrowse)
   onBrowseRef.current = onBrowse
+  const browseRef = useRef(browse)
+  browseRef.current = browse
 
   useEffect(() => {
     setFilter(browse.q ?? '')
@@ -45,7 +60,8 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
       const next = filter.trim()
       const current = browse.q ?? ''
       if (next === current) return
-      onBrowseRef.current({ q: next || null, page: 1, letter: null })
+      const currentBrowse = browseRef.current
+      onBrowseRef.current({ ...currentBrowse, q: next || null, page: 1, letter: null })
     }, 200)
     return () => window.clearTimeout(handle)
   }, [filter, browse.q])
@@ -59,13 +75,16 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
       page: browse.page,
       letter: browse.letter,
       q: browse.q,
+      region: browse.region,
+      district: browse.district,
+      decade: browse.decade,
     })
       .then((response) => {
         if (cancelled) return
         setList(response)
         setLoading(false)
         if (response.page !== browse.page) {
-          onBrowseRef.current({ page: response.page, letter: browse.letter, q: browse.q })
+          onBrowseRef.current({ ...browseRef.current, page: response.page })
         }
       })
       .catch((err: Error) => {
@@ -77,7 +96,7 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
     return () => {
       cancelled = true
     }
-  }, [locale, browse.page, browse.letter, browse.q, retryToken])
+  }, [locale, browse.page, browse.letter, browse.q, browse.region, browse.district, browse.decade, retryToken])
 
   useEffect(() => {
     if (!slug) {
@@ -127,6 +146,77 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
           autoComplete="off"
           onChange={(event) => setFilter(event.target.value)}
         />
+        <div className="places-filters">
+          <div className="chips" role="group" aria-label={placeFilterGroupLabel('region', locale)}>
+            {PLACE_REGIONS.map((region) => {
+              const pressed = browse.region === region.slug
+              return (
+                <button
+                  key={region.slug}
+                  type="button"
+                  className={`chip${pressed ? ' is-selected' : ''}`}
+                  aria-pressed={pressed}
+                  onClick={() =>
+                    onBrowse({
+                      ...browse,
+                      region: pressed ? null : region.slug,
+                      district: null,
+                      page: 1,
+                    })
+                  }
+                >
+                  {placeChipLabel(locale, region)}
+                </button>
+              )
+            })}
+          </div>
+          {browse.region ? (
+            <div className="chips" role="group" aria-label={placeFilterGroupLabel('district', locale)}>
+              {PLACE_REGIONS.find((region) => region.slug === browse.region)?.districts.map((district) => {
+                const pressed = browse.district === district.slug
+                return (
+                  <button
+                    key={district.slug}
+                    type="button"
+                    className={`chip${pressed ? ' is-selected' : ''}`}
+                    aria-pressed={pressed}
+                    onClick={() =>
+                      onBrowse({
+                        ...browse,
+                        district: pressed ? null : district.slug,
+                        page: 1,
+                      })
+                    }
+                  >
+                    {placeChipLabel(locale, district)}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+          <div className="chips" role="group" aria-label={placeFilterGroupLabel('decade', locale)}>
+            {PLACE_DECADES.map((decade) => {
+              const pressed = browse.decade === decade
+              return (
+                <button
+                  key={decade}
+                  type="button"
+                  className={`chip${pressed ? ' is-selected' : ''}`}
+                  aria-pressed={pressed}
+                  onClick={() =>
+                    onBrowse({
+                      ...browse,
+                      decade: pressed ? null : decade,
+                      page: 1,
+                    })
+                  }
+                >
+                  {placeChipLabel(locale, decade)}
+                </button>
+              )
+            })}
+          </div>
+        </div>
         {listError ? (
           <p className="error">
             {listError}{' '}

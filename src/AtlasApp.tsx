@@ -86,6 +86,7 @@ function AtlasApp() {
   const [site, setSite] = useState<SiteQueryResult | null>(null)
   const [nearby, setNearby] = useState<Feature[]>([])
   const [selected, setSelected] = useState<Feature | null>(null)
+  const [hitId, setHitId] = useState<string | null>(null)
   const [edges, setEdges] = useState<FeatureEdge[]>([])
   const [audit, setAudit] = useState<AuditEntry[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -97,6 +98,8 @@ function AtlasApp() {
   const [formError, setFormError] = useState<string | null>(null)
   const siteRef = useRef<SiteQueryResult | null>(null)
   const bboxRef = useRef<Bbox | null>(null)
+  const selectedRef = useRef<Feature | null>(null)
+  const siteRequest = useRef(0)
   siteRef.current = site
 
   const { locale, rest } = parseLocalePath(path)
@@ -121,7 +124,14 @@ function AtlasApp() {
   }, [])
 
   const browseDirectory = useCallback(
-    (next: { page: number; letter: string | null; q: string | null }) => {
+    (next: {
+      page: number
+      letter: string | null
+      q: string | null
+      region: string | null
+      district: string | null
+      decade: number | null
+    }) => {
       go(placesPublicPath(locale, placesSlug, next))
     },
     [go, locale, placesSlug],
@@ -131,7 +141,7 @@ function AtlasApp() {
     (slug: string | null) => {
       go(placesPublicPath(locale, slug, browse))
     },
-    [go, locale, browse.page, browse.letter, browse.q],
+    [go, locale, browse.page, browse.letter, browse.q, browse.region, browse.district, browse.decade],
   )
 
   useEffect(() => {
@@ -237,6 +247,7 @@ function AtlasApp() {
 
   const openSite = useCallback(
     async (lng: number, lat: number, bbox: Bbox) => {
+      const request = ++siteRequest.current
       bboxRef.current = bbox
       const gisBbox = gisAroundPoint(lng, lat) ?? bbox
       const [features, buildings, lots] = await Promise.all([
@@ -244,6 +255,7 @@ function AtlasApp() {
         fetchBuildingsInWgsBounds(gisBbox.west, gisBbox.south, gisBbox.east, gisBbox.north).catch(() => []),
         fetchLotsInWgsBounds(gisBbox.west, gisBbox.south, gisBbox.east, gisBbox.north).catch(() => []),
       ])
+      if (request !== siteRequest.current) return
       setNearby(features)
       setSite(
         querySite({
@@ -259,31 +271,47 @@ function AtlasApp() {
   )
 
   useEffect(() => {
-    if (!onMap) return
-    if (selected && selected.lng != null && selected.lat != null) {
-      const lng = selected.lng
-      const lat = selected.lat
-      void openSite(lng, lat, {
-        west: lng - 0.003,
-        south: lat - 0.003,
-        east: lng + 0.003,
-        north: lat + 0.003,
-      })
-      return
-    }
+    selectedRef.current = selected
+    if (!onMap || !selected || selected.lng == null || selected.lat == null) return
+    const lng = selected.lng
+    const lat = selected.lat
+    void openSite(lng, lat, {
+      west: lng - 0.003,
+      south: lat - 0.003,
+      east: lng + 0.003,
+      north: lat + 0.003,
+    })
+  }, [selected, year, openSite, onMap])
+
+  useEffect(() => {
+    if (!onMap || selectedRef.current) return
     const current = siteRef.current
     const bbox = bboxRef.current
     if (current && bbox) void openSite(current.lng, current.lat, bbox)
-  }, [selected?.id, year, openSite, onMap])
+  }, [year, openSite, onMap])
 
   function closePanel() {
     bboxRef.current = null
     siteRef.current = null
+    setHitId(null)
     setSite(null)
     setSelected(null)
     setEdges([])
     setAudit([])
     go(canonicalPath(locale, '/'))
+  }
+
+  function openPoint(lng: number, lat: number, bbox: Bbox, nextHitId: string | null) {
+    if (draft) {
+      setDraft({ ...draft, lng, lat })
+      return
+    }
+    go(canonicalPath(locale, '/'))
+    setHitId(nextHitId)
+    setSelected(null)
+    setEdges([])
+    setAudit([])
+    void openSite(lng, lat, bbox)
   }
 
   function selectSlug(slug: string) {
@@ -356,7 +384,14 @@ function AtlasApp() {
           <PlacesDirectory
             locale={locale}
             slug={placesSlug}
-            browse={{ page: browse.page, letter: browse.letter, q: browse.q }}
+            browse={{
+              page: browse.page,
+              letter: browse.letter,
+              q: browse.q,
+              region: browse.region,
+              district: browse.district,
+              decade: browse.decade,
+            }}
             onBrowse={browseDirectory}
             onSelectSlug={selectDirectorySlug}
             onViewMap={(slug, kind) => go(featurePublicPath(locale, kind, slug))}
@@ -367,20 +402,10 @@ function AtlasApp() {
           <div className="map-stack">
             <AtlasMap
               catalog={visible}
-              selectedId={selected?.id ?? null}
+              selectedId={selected?.id ?? hitId}
               buildings={site?.buildings ?? []}
               lots={site?.lots ?? []}
-              onPinClick={(slug) => selectSlug(slug)}
-              onMapClick={(lng, lat, bbox) => {
-                if (draft) {
-                  setDraft({ ...draft, lng, lat })
-                  return
-                }
-                go(canonicalPath(locale, '/'))
-                setSelected(null)
-                setEdges([])
-                void openSite(lng, lat, bbox)
-              }}
+              onPointClick={openPoint}
             />
             <YearSlider min={MIN_YEAR} max={NOW} value={year} onChange={setYear} />
           </div>

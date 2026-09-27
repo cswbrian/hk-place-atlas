@@ -30,11 +30,17 @@ export async function fetchPlaces(input: {
   page?: number
   letter?: string | null
   q?: string | null
+  region?: string | null
+  district?: string | null
+  decade?: number | null
 }): Promise<PlacesListResponse> {
   const params = new URLSearchParams({ locale: input.locale })
   if (input.page && input.page > 1) params.set('page', String(input.page))
   if (input.q?.trim()) params.set('q', input.q.trim())
   else if (input.letter) params.set('letter', input.letter)
+  if (input.region) params.set('region', input.region)
+  if (input.district) params.set('district', input.district)
+  if (input.decade) params.set('decade', String(input.decade))
   const response = await fetch(`/api/places?${params}`)
   if (!response.ok) throw new Error('Could not load places')
   return (await response.json()) as PlacesListResponse

@@ -26,8 +26,7 @@ type Props = {
   selectedId: string | null
   buildings: BuildingSnapshot[]
   lots: LotSnapshot[]
-  onPinClick: (slug: string, lng: number, lat: number) => void
-  onMapClick: (lng: number, lat: number, bbox: Bbox) => void
+  onPointClick: (lng: number, lat: number, bbox: Bbox, hitId: string | null) => void
 }
 
 function polygonCollection<T extends { geometry: Polygon | MultiPolygon }>(
@@ -54,21 +53,19 @@ function bboxOf(map: MapLibreMap): Bbox {
   }
 }
 
-export function AtlasMap({ catalog, selectedId, buildings, lots, onPinClick, onMapClick }: Props) {
+export function AtlasMap({ catalog, selectedId, buildings, lots, onPointClick }: Props) {
   const root = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const catalogRef = useRef(catalog)
   const selectedRef = useRef(selectedId)
   const buildingsRef = useRef(buildings)
   const lotsRef = useRef(lots)
-  const onPin = useRef(onPinClick)
-  const onMap = useRef(onMapClick)
+  const onPoint = useRef(onPointClick)
   catalogRef.current = catalog
   selectedRef.current = selectedId
   buildingsRef.current = buildings
   lotsRef.current = lots
-  onPin.current = onPinClick
-  onMap.current = onMapClick
+  onPoint.current = onPointClick
 
   useEffect(() => {
     if (!root.current) return
@@ -220,20 +217,14 @@ export function AtlasMap({ catalog, selectedId, buildings, lots, onPinClick, onM
       }
       const pins = map.queryRenderedFeatures(event.point, { layers: ['unclustered'] })
       const pin = pins[0]
-      if (pin && pin.geometry.type === 'Point') {
-        const slug = pin.properties?.slug
-        if (typeof slug === 'string') {
-          if (map.getZoom() < GIS_ZOOM) {
-            map.easeTo({ center: pin.geometry.coordinates as [number, number], zoom: GIS_ZOOM })
-          }
-          onPin.current(slug, pin.geometry.coordinates[0], pin.geometry.coordinates[1])
-        }
-        return
-      }
+      const pinPoint = pin?.geometry.type === 'Point' ? (pin.geometry.coordinates as [number, number]) : null
+      const lng = pinPoint?.[0] ?? event.lngLat.lng
+      const lat = pinPoint?.[1] ?? event.lngLat.lat
+      const hitId = typeof pin?.properties?.id === 'string' ? pin.properties.id : null
       if (map.getZoom() < GIS_ZOOM) {
-        map.easeTo({ center: [event.lngLat.lng, event.lngLat.lat], zoom: GIS_ZOOM })
+        map.easeTo({ center: [lng, lat], zoom: GIS_ZOOM })
       }
-      onMap.current(event.lngLat.lng, event.lngLat.lat, bboxOf(map))
+      onPoint.current(lng, lat, bboxOf(map), hitId)
     })
 
     const pointer = () => {

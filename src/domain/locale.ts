@@ -18,6 +18,9 @@ export type PlacesBrowse = {
   page?: number
   letter?: string | null
   q?: string | null
+  region?: string | null
+  district?: string | null
+  decade?: number | null
 }
 
 export const copy = {
@@ -138,6 +141,9 @@ export function placesPublicPath(
   const q = browse.q?.trim()
   if (q) params.set('q', q)
   if (!q && browse.letter) params.set('letter', browse.letter)
+  if (browse.region) params.set('region', browse.region)
+  if (browse.district) params.set('district', browse.district)
+  if (browse.decade) params.set('decade', String(browse.decade))
   if (browse.page && browse.page > 1) params.set('page', String(browse.page))
   const query = params.toString()
   return query ? `${base}?${query}` : base

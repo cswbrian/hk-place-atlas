@@ -154,6 +154,22 @@ button .zh {
   margin-bottom: 12px;
 }
 
+.places-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.places-filters .chips {
+  margin-bottom: 0;
+}
+
+.chip.is-selected {
+  background: var(--foreground);
+  color: var(--background);
+}
+
 .places-pager {
   display: flex;
   align-items: center;
@@ -786,7 +802,7 @@ fieldset legend {
   .places-directory.is-detail .places-list { display: none; }
   .places-detail { border-left: none; }
   .sidebar { border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
-  button:not(.linkish):not(.ghost),
+  button:not(.linkish):not(.ghost):not(.chip),
   .upload {
     min-height: 44px;
   }

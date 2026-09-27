@@ -24,6 +24,9 @@ describe('parsePlacesListQuery', () => {
       pageSize: PLACES_PAGE_SIZE,
       letter: null,
       q: null,
+      region: null,
+      district: null,
+      decade: null,
       locale: 'en',
     })
     const params = new URLSearchParams('page=2&letter=j&q=house&pageSize=999')
@@ -32,8 +35,37 @@ describe('parsePlacesListQuery', () => {
       pageSize: 100,
       letter: null,
       q: 'house',
+      region: null,
+      district: null,
+      decade: null,
       locale: 'zh-hk',
     })
+  })
+
+  it('keeps a region, its district, and a decade together with q', () => {
+    expect(
+      parsePlacesListQuery(
+        new URLSearchParams('region=kowloon&district=yau-tsim-mong&decade=1980&q=garden'),
+        'en',
+      ),
+    ).toMatchObject({
+      region: 'kowloon',
+      district: 'yau-tsim-mong',
+      decade: 1980,
+      q: 'garden',
+      letter: null,
+    })
+  })
+
+  it('drops an unknown region, a district outside that region, and an unknown decade', () => {
+    expect(parsePlacesListQuery(new URLSearchParams('region=nope'), 'en').region).toBeNull()
+    expect(parsePlacesListQuery(new URLSearchParams('district=yau-tsim-mong'), 'en').district).toBeNull()
+    expect(parsePlacesListQuery(new URLSearchParams('region=kowloon&district=southern'), 'en')).toMatchObject({
+      region: 'kowloon',
+      district: null,
+    })
+    expect(parsePlacesListQuery(new URLSearchParams('decade=1930'), 'en').decade).toBeNull()
+    expect(parsePlacesListQuery(new URLSearchParams('decade=1980s'), 'en').decade).toBeNull()
   })
 
   it('accepts A-Z and #, ignores other letters', () => {

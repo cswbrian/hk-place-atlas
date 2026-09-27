@@ -1,4 +1,5 @@
 import type { SiteLocale } from './locale'
+import { readPlacesFilters } from './placesFilters'
 
 export const PLACES_PAGE_SIZE = 50
 export const PLACES_PAGE_SIZE_MAX = 100
@@ -9,6 +10,9 @@ export type PlacesListQuery = {
   pageSize: number
   letter: string | null
   q: string | null
+  region: string | null
+  district: string | null
+  decade: number | null
   locale: SiteLocale
 }
 
@@ -42,7 +46,8 @@ export function parsePlacesListQuery(params: URLSearchParams, locale: SiteLocale
   const q = params.get('q')?.trim() || null
   const rawLetter = (params.get('letter') ?? '').toUpperCase()
   const letter = q ? null : rawLetter === '#' || /^[A-Z]$/.test(rawLetter) ? rawLetter : null
-  return { page, pageSize, letter, q, locale: locale === 'zh-hk' ? 'zh-hk' : 'en' }
+  const filters = readPlacesFilters(params)
+  return { page, pageSize, letter, q, ...filters, locale: locale === 'zh-hk' ? 'zh-hk' : 'en' }
 }
 
 export function clampPage(page: number, total: number, pageSize: number): number {
