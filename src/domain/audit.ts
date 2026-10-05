@@ -8,6 +8,7 @@ export type AuditEntry = {
   at: string
   actorEmail: string
   action: AuditAction
+  entityType: 'feature' | 'photo'
   entityId: string
   before: Feature | null
   after: Feature | null
@@ -60,6 +61,7 @@ export function parseAuditRow(row: unknown): AuditEntry | { error: string } {
     at: typeof row.at === 'string' ? row.at : '',
     actorEmail: typeof row.actor_email === 'string' ? row.actor_email : '',
     action: row.action as AuditAction,
+    entityType: row.entity_type === 'photo' ? 'photo' : 'feature',
     entityId: row.entity_id,
     before: parseJsonFeature(row.before_json),
     after: parseJsonFeature(row.after_json),

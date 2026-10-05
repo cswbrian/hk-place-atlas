@@ -1,5 +1,5 @@
 import type { FeatureCollection, Point } from 'geojson'
-import { featureStandingInYear, type Feature, type FeatureKind, type FeatureStatus } from './feature'
+import { type Feature, type FeatureKind, type FeatureStatus } from './feature'
 
 export type CatalogProperties = {
   id: string
@@ -13,33 +13,6 @@ export type CatalogProperties = {
 }
 
 export type CatalogGeojson = FeatureCollection<Point, CatalogProperties>
-
-function yearDate(year: number | null) {
-  return year == null ? null : { year }
-}
-
-export function catalogStandingInYear(properties: CatalogProperties, year: number, now: number): boolean {
-  return featureStandingInYear(
-    {
-      kind: properties.kind,
-      start: yearDate(properties.startYear),
-      end: yearDate(properties.endYear),
-    },
-    year,
-    now,
-  )
-}
-
-export function filterCatalogCollection(
-  collection: CatalogGeojson,
-  year: number,
-  now: number,
-): CatalogGeojson {
-  return {
-    type: 'FeatureCollection',
-    features: collection.features.filter((feature) => catalogStandingInYear(feature.properties, year, now)),
-  }
-}
 
 export function catalogFeatureToFeature(feature: CatalogGeojson['features'][number]): Feature {
   const [lng, lat] = feature.geometry.coordinates

@@ -29,6 +29,7 @@ function entry(partial: Partial<AuditEntry> & Pick<AuditEntry, 'action'>): Audit
     at: '2026-01-03T00:00:00.000Z',
     actorEmail: 'a@b.co',
     entityId: cafe.id,
+    entityType: 'feature',
     before: null,
     after: null,
     ...partial,
@@ -50,6 +51,20 @@ describe('parseAuditRow', () => {
     if ('error' in parsed) throw new Error(parsed.error)
     expect(parsed.before?.nameEn).toBe('Cafe')
     expect(parsed.after?.nameEn).toBe('Cafe Renamed')
+  })
+
+  it('reads a photo add without treating it as a place edit', () => {
+    const parsed = parseAuditRow({
+      id: 'aud-photo',
+      at: '2026-10-06T00:00:00.000Z',
+      actor_email: 'a@b.co',
+      action: 'put',
+      entity_type: 'photo',
+      entity_id: 'pic-1',
+      before_json: null,
+      after_json: JSON.stringify({ id: 'pic-1', featureId: 'wiki-1', source: 'SCMP' }),
+    })
+    expect(parsed).toMatchObject({ action: 'put', entityType: 'photo', entityId: 'pic-1', before: null, after: null })
   })
 })
 

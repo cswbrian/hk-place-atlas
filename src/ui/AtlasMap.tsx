@@ -3,6 +3,7 @@ import {
   AttributionControl,
   GeoJSONSource,
   Map as MapLibreMap,
+  Marker,
   NavigationControl,
   setWorkerUrl,
   type MapMouseEvent,
@@ -11,6 +12,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import type { CatalogGeojson } from '../domain/catalog'
 import type { Bbox } from '../domain/featureQuery'
+import { mapThumbs, thumbPath, type PhotoPin } from '../domain/photo'
 import type { BuildingSnapshot, LotSnapshot } from '../domain/types'
 import { OPENFREEMAP_ATTRIBUTION, OPENFREEMAP_BRIGHT_STYLE } from './basemap'
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
@@ -24,9 +26,13 @@ const GIS_ZOOM = 17
 type Props = {
   catalog: CatalogGeojson
   selectedId: string | null
+  focus: Bbox | null
   buildings: BuildingSnapshot[]
   lots: LotSnapshot[]
+  photos: PhotoPin[]
   onPointClick: (lng: number, lat: number, bbox: Bbox, hitId: string | null) => void
+  onPhotoClick: (featureId: string) => void
+  onView: (bbox: Bbox, zoom: number) => void
 }
 
 function polygonCollection<T extends { geometry: Polygon | MultiPolygon }>(
@@ -53,19 +59,36 @@ function bboxOf(map: MapLibreMap): Bbox {
   }
 }
 
-export function AtlasMap({ catalog, selectedId, buildings, lots, onPointClick }: Props) {
+export function AtlasMap({
+  catalog,
+  selectedId,
+  focus,
+  buildings,
+  lots,
+  photos,
+  onPointClick,
+  onPhotoClick,
+  onView,
+}: Props) {
   const root = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const catalogRef = useRef(catalog)
   const selectedRef = useRef(selectedId)
   const buildingsRef = useRef(buildings)
   const lotsRef = useRef(lots)
+  const photosRef = useRef(photos)
   const onPoint = useRef(onPointClick)
+  const onPhoto = useRef(onPhotoClick)
+  const onViewRef = useRef(onView)
+  const paintPhotosRef = useRef<() => void>(() => {})
   catalogRef.current = catalog
   selectedRef.current = selectedId
   buildingsRef.current = buildings
   lotsRef.current = lots
+  photosRef.current = photos
   onPoint.current = onPointClick
+  onPhoto.current = onPhotoClick
+  onViewRef.current = onView
 
   useEffect(() => {
     if (!root.current) return
@@ -90,6 +113,38 @@ export function AtlasMap({ catalog, selectedId, buildings, lots, onPointClick }:
       const hit = catalogRef.current.features.find((feature) => feature.properties.id === id)
       return hit ? { type: 'FeatureCollection', features: [hit] } : EMPTY
     }
+
+    const photoMarkers: Marker[] = []
+    const paintPhotos = () => {
+      for (const marker of photoMarkers) marker.remove()
+      photoMarkers.length = 0
+      const thumbs = mapThumbs(photosRef.current, map.getZoom())
+      for (const thumb of thumbs) {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'map-photo'
+        const image = document.createElement('img')
+        image.src = thumbPath(thumb.id, 'map')
+        image.alt = ''
+        button.append(image)
+        if (thumb.count > 1) {
+          const count = document.createElement('span')
+          count.textContent = String(thumb.count)
+          button.append(count)
+        }
+        button.addEventListener('click', (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onPhoto.current(thumb.featureId)
+        })
+        photoMarkers.push(
+          new Marker({ element: button, anchor: 'left', offset: [14, 0] })
+            .setLngLat([thumb.lng, thumb.lat])
+            .addTo(map),
+        )
+      }
+    }
+    paintPhotosRef.current = paintPhotos
 
     map.on('load', () => {
       map.addSource('gis-lots', {
@@ -187,6 +242,7 @@ export function AtlasMap({ catalog, selectedId, buildings, lots, onPointClick }:
           'circle-stroke-color': '#111111',
         },
       })
+      void paintPhotos()
       const selected = catalogRef.current.features.find(
         (feature) => feature.properties.id === selectedRef.current,
       )
@@ -233,6 +289,10 @@ export function AtlasMap({ catalog, selectedId, buildings, lots, onPointClick }:
     const reset = () => {
       map.getCanvas().style.cursor = ''
     }
+    map.on('moveend', () => {
+      onViewRef.current(bboxOf(map), map.getZoom())
+      void paintPhotos()
+    })
     map.on('mouseenter', 'clusters', pointer)
     map.on('mouseenter', 'unclustered', pointer)
     map.on('mouseenter', 'gis-buildings-fill', pointer)
@@ -255,6 +315,10 @@ export function AtlasMap({ catalog, selectedId, buildings, lots, onPointClick }:
   }, [catalog])
 
   useEffect(() => {
+    void paintPhotosRef.current()
+  }, [photos])
+
+  useEffect(() => {
     const map = mapRef.current
     const source = map?.getSource('selected')
     if (!(source instanceof GeoJSONSource)) return
@@ -275,6 +339,35 @@ export function AtlasMap({ catalog, selectedId, buildings, lots, onPointClick }:
       source.setData(polygonCollection(lots, (lot) => lot.number))
     }
   }, [lots])
+
+  const hadFocus = useRef(false)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (!focus && !hadFocus.current) return
+    let frame = 0
+    const apply = () => {
+      if (!map.isStyleLoaded()) {
+        frame = requestAnimationFrame(apply)
+        return
+      }
+      if (!focus) {
+        hadFocus.current = false
+        map.easeTo({ center: HK, zoom: 11 })
+        return
+      }
+      hadFocus.current = true
+      map.fitBounds(
+        [
+          [focus.west, focus.south],
+          [focus.east, focus.north],
+        ],
+        { padding: { top: 120, left: 28, right: 28, bottom: 28 }, maxZoom: 14, duration: 700 },
+      )
+    }
+    apply()
+    return () => cancelAnimationFrame(frame)
+  }, [focus])
 
   const selectedPoint = catalog.features.find((feature) => feature.properties.id === selectedId)
   const selectedLng = selectedPoint?.geometry.type === 'Point' ? selectedPoint.geometry.coordinates[0] : null

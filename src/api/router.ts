@@ -2,6 +2,7 @@ export type ApiRoute =
   | { type: 'feature'; slug: string }
   | { type: 'list' }
   | { type: 'places' }
+  | { type: 'recent' }
   | { type: 'edges'; featureId: string }
   | { type: 'me' }
   | { type: 'authGoogle' }
@@ -14,11 +15,15 @@ export type ApiRoute =
   | { type: 'gisBuildings' }
   | { type: 'gisParcels' }
   | { type: 'gisParcelSearch' }
+  | { type: 'photos' }
+  | { type: 'photo'; id: string }
+  | { type: 'photoThumb'; id: string }
 
 export function parseApiRoute(url: URL): ApiRoute | null {
   const path = url.pathname.replace(/\/$/, '') || '/'
   if (path === '/api/features') return { type: 'list' }
   if (path === '/api/places') return { type: 'places' }
+  if (path === '/api/recent') return { type: 'recent' }
   const feature = /^\/api\/features\/([^/]+)$/.exec(path)
   if (feature) return { type: 'feature', slug: decodeURIComponent(feature[1]!) }
   if (path === '/api/edges') {
@@ -39,6 +44,11 @@ export function parseApiRoute(url: URL): ApiRoute | null {
   }
   const revert = /^\/api\/audit\/([^/]+)\/revert$/.exec(path)
   if (revert) return { type: 'auditRevert', id: decodeURIComponent(revert[1]!) }
+  if (path === '/api/photos') return { type: 'photos' }
+  const photoThumb = /^\/api\/photos\/([^/]+)\/thumb$/.exec(path)
+  if (photoThumb) return { type: 'photoThumb', id: decodeURIComponent(photoThumb[1]!) }
+  const photo = /^\/api\/photos\/([^/]+)$/.exec(path)
+  if (photo) return { type: 'photo', id: decodeURIComponent(photo[1]!) }
   if (path === '/api/gis/buildings') return { type: 'gisBuildings' }
   if (path === '/api/gis/parcels') return { type: 'gisParcels' }
   if (path === '/api/gis/parcel-search') return { type: 'gisParcelSearch' }

@@ -2,6 +2,7 @@ import type { Feature } from '../domain/feature'
 import type { Bbox } from '../domain/featureQuery'
 import type { AuditEntry } from '../domain/audit'
 import type { PlacesListResponse } from '../domain/placesQuery'
+import type { RecentItem } from '../domain/recent'
 import type { SiteLocale } from '../domain/locale'
 
 export type { AuditEntry }
@@ -46,10 +47,16 @@ export async function fetchPlaces(input: {
   return (await response.json()) as PlacesListResponse
 }
 
-export async function fetchFeaturesInBbox(bbox: Bbox, year: number, kind?: string): Promise<Feature[]> {
+export async function fetchRecent(): Promise<RecentItem[]> {
+  const response = await fetch('/api/recent')
+  if (!response.ok) throw new Error('Could not load recent updates')
+  const body = (await response.json()) as { features: RecentItem[] }
+  return body.features
+}
+
+export async function fetchFeaturesInBbox(bbox: Bbox, kind?: string): Promise<Feature[]> {
   const params = new URLSearchParams({
     bbox: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
-    year: String(year),
   })
   if (kind) params.set('kind', kind)
   const response = await fetch(`/api/features?${params}`)
@@ -71,10 +78,9 @@ export async function fetchMe(): Promise<{ user: AtlasUser | null; auth: boolean
   return (await response.json()) as { user: AtlasUser | null; auth: boolean }
 }
 
-export async function fetchOverlay(bbox: Bbox, year: number): Promise<Feature[]> {
+export async function fetchOverlay(bbox: Bbox): Promise<Feature[]> {
   const params = new URLSearchParams({
     bbox: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
-    year: String(year),
   })
   const response = await fetch(`/api/overlay?${params}`)
   if (!response.ok) throw new Error('Could not load overlay')
@@ -97,9 +103,8 @@ export async function saveFeature(write: unknown, slug?: string, updatedAt?: str
   return (await response.json()) as Feature
 }
 
-export async function fetchSearch(q: string, year?: number, kind?: string): Promise<Feature[]> {
+export async function fetchSearch(q: string, kind?: string): Promise<Feature[]> {
   const params = new URLSearchParams({ q })
-  if (year != null && Number.isInteger(year)) params.set('year', String(year))
   if (kind) params.set('kind', kind)
   const response = await fetch(`/api/search?${params}`)
   if (!response.ok) throw new Error('Could not search')

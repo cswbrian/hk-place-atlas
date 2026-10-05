@@ -1,6 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
-import { fetchFeatureBySlug, fetchPlaces } from '../api/features'
-import { featureAsEstablishment, type Feature } from '../domain/feature'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  fetchAudit,
+  fetchEdges,
+  fetchFeatureBySlug,
+  fetchFeaturesInBbox,
+  fetchPlaces,
+  type AtlasUser,
+  type AuditEntry,
+  type FeatureEdge,
+} from '../api/features'
+import { type Feature } from '../domain/feature'
+import { gisAroundPoint } from '../domain/gis'
 import { copy, displayNames, type SiteLocale } from '../domain/locale'
 import {
   PLACE_DECADES,
@@ -9,7 +19,8 @@ import {
   placeFilterGroupLabel,
 } from '../domain/placesFilters'
 import type { PlacesListItem, PlacesListResponse } from '../domain/placesQuery'
-import { EstablishmentDetail } from './EstablishmentDetail'
+import { FeaturePanel } from './FeaturePanel'
+import { PlacePhotos } from './PlacePhotos'
 
 type Browse = {
   page: number
@@ -24,9 +35,73 @@ type Props = {
   locale: SiteLocale
   slug: string | null
   browse: Browse
+  user?: AtlasUser | null
   onBrowse: (next: Browse) => void
   onSelectSlug: (slug: string | null) => void
   onViewMap: (slug: string, kind: Feature['kind']) => void
+}
+
+function withSelected(features: Feature[], selected: Feature): Feature[] {
+  if (features.some((feature) => feature.id === selected.id)) {
+    return features.map((feature) => (feature.id === selected.id ? selected : feature))
+  }
+  return [selected, ...features]
+}
+
+export function DirectoryAside({
+  locale,
+  feature,
+  features,
+  edges = [],
+  user = null,
+  audit = null,
+  onSelectSlug,
+  onBack,
+  onShowHistory,
+  onViewMap,
+}: {
+  locale: SiteLocale
+  feature: Feature
+  features: Feature[]
+  edges?: FeatureEdge[]
+  user?: AtlasUser | null
+  audit?: AuditEntry[] | null
+  onSelectSlug: (slug: string) => void
+  onBack: () => void
+  onShowHistory: () => void
+  onViewMap: (slug: string, kind: Feature['kind']) => void
+}): ReactNode {
+  const text = copy[locale]
+  return (
+    <>
+      <FeaturePanel
+        locale={locale}
+        site={null}
+        features={features}
+        selected={feature}
+        edges={edges}
+        onSelectSlug={onSelectSlug}
+        onClose={onBack}
+        onBack={onBack}
+        audit={audit}
+        onShowHistory={onShowHistory}
+        photos={
+          <PlacePhotos
+            featureId={feature.id}
+            placeName={displayNames(feature, locale).title}
+            canUpload={Boolean(user) && feature.lng != null && feature.lat != null}
+            userSub={user?.sub ?? null}
+            locale={locale}
+          />
+        }
+      />
+      <p>
+        <button type="button" onClick={() => onViewMap(feature.slug, feature.kind)}>
+          {text.viewOnMap}
+        </button>
+      </p>
+    </>
+  )
 }
 
 function yearLabel(item: PlacesListItem): string {
@@ -36,7 +111,7 @@ function yearLabel(item: PlacesListItem): string {
   return `${item.startYear}–${item.endYear}`
 }
 
-export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, onViewMap }: Props) {
+export function PlacesDirectory({ locale, slug, browse, user = null, onBrowse, onSelectSlug, onViewMap }: Props) {
   const text = copy[locale]
   const [list, setList] = useState<PlacesListResponse | null>(null)
   const [listError, setListError] = useState<string | null>(null)
@@ -44,6 +119,9 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
   const [retryToken, setRetryToken] = useState(0)
   const [filter, setFilter] = useState(browse.q ?? '')
   const [selected, setSelected] = useState<Feature | null>(null)
+  const [nearby, setNearby] = useState<Feature[]>([])
+  const [edges, setEdges] = useState<FeatureEdge[]>([])
+  const [audit, setAudit] = useState<AuditEntry[] | null>(null)
   const [detailMissing, setDetailMissing] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const onBrowseRef = useRef(onBrowse)
@@ -125,6 +203,49 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
       cancelled = true
     }
   }, [slug])
+
+  useEffect(() => {
+    if (!selected || selected.lng == null || selected.lat == null) {
+      setNearby([])
+      return
+    }
+    const bbox = gisAroundPoint(selected.lng, selected.lat)
+    if (!bbox) {
+      setNearby([])
+      return
+    }
+    let cancelled = false
+    void fetchFeaturesInBbox(bbox)
+      .then((features) => {
+        if (!cancelled) setNearby(features)
+      })
+      .catch(() => {
+        if (!cancelled) setNearby([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selected])
+
+  useEffect(() => {
+    if (!selected) {
+      setEdges([])
+      setAudit(null)
+      return
+    }
+    let cancelled = false
+    setAudit(null)
+    void fetchEdges(selected.id)
+      .then((rows) => {
+        if (!cancelled) setEdges(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setEdges([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selected])
 
   const total = list?.total ?? 0
   const pageSize = list?.pageSize ?? 50
@@ -278,20 +399,22 @@ export function PlacesDirectory({ locale, slug, browse, onBrowse, onSelectSlug, 
         {slug && detailLoading ? <p className="muted">…</p> : null}
         {slug && detailMissing && !detailLoading ? <p className="muted">{text.emptySite}</p> : null}
         {selected ? (
-          <>
-            <EstablishmentDetail
-              establishment={featureAsEstablishment(selected)}
-              establishments={[featureAsEstablishment(selected)]}
-              relations={[]}
-              onSelect={() => undefined}
-              onBack={() => onSelectSlug(null)}
-            />
-            <p>
-              <button type="button" onClick={() => onViewMap(selected.slug, selected.kind)}>
-                {text.viewOnMap}
-              </button>
-            </p>
-          </>
+          <DirectoryAside
+            locale={locale}
+            feature={selected}
+            features={withSelected(nearby, selected)}
+            edges={edges}
+            user={user}
+            audit={audit}
+            onSelectSlug={onSelectSlug}
+            onBack={() => onSelectSlug(null)}
+            onShowHistory={() => {
+              void fetchAudit(selected.id)
+                .then(setAudit)
+                .catch(() => setAudit([]))
+            }}
+            onViewMap={onViewMap}
+          />
         ) : null}
       </section>
     </div>

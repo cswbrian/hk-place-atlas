@@ -28,6 +28,10 @@ describe('parseApiRoute', () => {
     })
   })
 
+  it('matches the recent updates list', () => {
+    expect(parseApiRoute(new URL('https://x/api/recent'))).toEqual({ type: 'recent' })
+  })
+
   it('matches wiki and auth routes', () => {
     expect(parseApiRoute(new URL('https://x/api/me'))).toEqual({ type: 'me' })
     expect(parseApiRoute(new URL('https://x/api/auth/google'))).toEqual({ type: 'authGoogle' })
@@ -48,6 +52,12 @@ describe('parseApiRoute', () => {
     })
     expect(parseApiRoute(new URL('https://x/api/gis/parcel-search?kind=lot&q=IL'))).toEqual({
       type: 'gisParcelSearch',
+    })
+    expect(parseApiRoute(new URL('https://x/api/photos?featureId=bdbiar-1'))).toEqual({ type: 'photos' })
+    expect(parseApiRoute(new URL('https://x/api/photos/pic-1'))).toEqual({ type: 'photo', id: 'pic-1' })
+    expect(parseApiRoute(new URL('https://x/api/photos/pic-1/thumb?size=map'))).toEqual({
+      type: 'photoThumb',
+      id: 'pic-1',
     })
   })
 

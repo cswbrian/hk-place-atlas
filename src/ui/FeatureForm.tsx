@@ -21,6 +21,7 @@ export type WikiDraft = {
 }
 
 const KINDS: WikiDraft['kind'][] = ['establishment', 'shop', 'event']
+const STATUSES: FeatureStatus[] = ['standing', 'demolished', 'unknown']
 
 function yearPart(value: string): number | undefined {
   const n = Number(value)
@@ -152,25 +153,47 @@ export function FeatureForm({ locale, draft, creating, error, onChange, onSave, 
         <input value={draft.nameZh} onChange={(event) => onChange({ ...draft, nameZh: event.target.value })} />
       </label>
       <label>
-        Status
+        {text.status}
         <select
           value={draft.status}
           onChange={(event) => onChange({ ...draft, status: event.target.value as FeatureStatus })}
         >
-          <option value="standing">standing</option>
-          <option value="demolished">demolished</option>
-          <option value="unknown">unknown</option>
+          {STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {text[status]}
+            </option>
+          ))}
         </select>
       </label>
       <div className="date-row">
-        <label>
-          Start
-          <input value={draft.startYear} onChange={(event) => onChange({ ...draft, startYear: event.target.value })} placeholder="year" />
-        </label>
-        <label>
-          End
-          <input value={draft.endYear} onChange={(event) => onChange({ ...draft, endYear: event.target.value })} placeholder="year" />
-        </label>
+        <div>
+          <label>
+            {text.start}
+            <input value={draft.startYear} onChange={(event) => onChange({ ...draft, startYear: event.target.value })} placeholder={text.year} />
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.startCirca}
+              onChange={(event) => onChange({ ...draft, startCirca: event.target.checked })}
+            />
+            {text.circa}
+          </label>
+        </div>
+        <div>
+          <label>
+            {text.end}
+            <input value={draft.endYear} onChange={(event) => onChange({ ...draft, endYear: event.target.value })} placeholder={text.year} />
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.endCirca}
+              onChange={(event) => onChange({ ...draft, endCirca: event.target.checked })}
+            />
+            {text.circa}
+          </label>
+        </div>
       </div>
       <label>
         {text.notes}

@@ -7,6 +7,7 @@ import {
   fetchFeaturesInBbox,
   fetchMe,
   fetchOverlay,
+  fetchRecent,
   revertAudit,
   saveFeature,
   type AtlasUser,
@@ -14,7 +15,6 @@ import {
 } from './api/features'
 import {
   catalogFeatureToFeature,
-  filterCatalogCollection,
   mergeOverlay,
   type CatalogGeojson,
 } from './domain/catalog'
@@ -34,19 +34,22 @@ import {
 } from './domain/locale'
 import { parsePlacesListQuery } from './domain/placesQuery'
 import { querySite, type SiteQueryResult } from './domain/querySite'
-import { maxYear, MIN_YEAR } from './domain/yearView'
 import { trackPageview } from './domain/analytics'
+import { districtBbox } from './domain/districtView'
+import { shouldLoadRecent, type RecentItem } from './domain/recent'
 import { AtlasMap } from './ui/AtlasMap'
+import { MapRegionChips } from './ui/MapRegionChips'
 import { FeatureForm, emptyWikiDraft, wikiDraftFromFeature, wikiDraftToWrite, type WikiDraft } from './ui/FeatureForm'
 import { FeaturePanel } from './ui/FeaturePanel'
 import { PlacesDirectory } from './ui/PlacesDirectory'
-import { YearSlider } from './ui/YearSlider'
 import { gisAroundPoint } from './domain/gis'
 import { wikiCanDelete } from './domain/wiki'
 import { fetchBuildingsInWgsBounds } from './ui/buildings/buildingApi'
 import { fetchLotsInWgsBounds } from './ui/lots/lotApi'
+import { fetchPhotos } from './api/photos'
+import { PHOTO_MAP_ZOOM, type PhotoPin } from './domain/photo'
+import { PlacePhotos } from './ui/PlacePhotos'
 
-const NOW = maxYear()
 const EMPTY_CATALOG: CatalogGeojson = { type: 'FeatureCollection', features: [] }
 const HK_BBOX = { west: 113.8, south: 22.15, east: 114.45, north: 22.58 }
 
@@ -54,19 +57,19 @@ function canonicalPath(locale: SiteLocale, rest: string): string {
   return rest === '/' ? `/${locale}` : `/${locale}${rest}`
 }
 
-function stubNearby(catalog: CatalogGeojson, bbox: Bbox, year: number): Feature[] {
-  return filterCatalogCollection(catalog, year, NOW)
-    .features.filter((feature) =>
+function stubNearby(catalog: CatalogGeojson, bbox: Bbox): Feature[] {
+  return catalog.features
+    .filter((feature) =>
       featureInBbox(feature.geometry.coordinates[0], feature.geometry.coordinates[1], bbox),
     )
     .map(catalogFeatureToFeature)
 }
 
-async function loadNearby(bbox: Bbox, year: number, catalog: CatalogGeojson): Promise<Feature[]> {
+async function loadNearby(bbox: Bbox, catalog: CatalogGeojson): Promise<Feature[]> {
   try {
-    return await fetchFeaturesInBbox(bbox, year)
+    return await fetchFeaturesInBbox(bbox)
   } catch {
-    return stubNearby(catalog, bbox, year)
+    return stubNearby(catalog, bbox)
   }
 }
 
@@ -81,14 +84,13 @@ function mergeSelected(features: Feature[], selected: Feature | null): Feature[]
 function AtlasApp() {
   const [path, setPath] = useState(() => window.location.pathname)
   const [search, setSearch] = useState(() => window.location.search)
-  const [year, setYear] = useState(NOW)
   const [catalog, setCatalog] = useState<CatalogGeojson>(EMPTY_CATALOG)
   const [site, setSite] = useState<SiteQueryResult | null>(null)
   const [nearby, setNearby] = useState<Feature[]>([])
   const [selected, setSelected] = useState<Feature | null>(null)
   const [hitId, setHitId] = useState<string | null>(null)
   const [edges, setEdges] = useState<FeatureEdge[]>([])
-  const [audit, setAudit] = useState<AuditEntry[]>([])
+  const [audit, setAudit] = useState<AuditEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [overlay, setOverlay] = useState<Feature[]>([])
   const [user, setUser] = useState<AtlasUser | null>(null)
@@ -96,10 +98,46 @@ function AtlasApp() {
   const [draft, setDraft] = useState<WikiDraft | null>(null)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [mapRegion, setMapRegion] = useState<string | null>(null)
+  const [mapDistrict, setMapDistrict] = useState<string | null>(null)
+  const [recent, setRecent] = useState<RecentItem[]>([])
+  const [mapPhotos, setMapPhotos] = useState<PhotoPin[]>([])
   const siteRef = useRef<SiteQueryResult | null>(null)
   const bboxRef = useRef<Bbox | null>(null)
   const selectedRef = useRef<Feature | null>(null)
   const siteRequest = useRef(0)
+  const photoRequest = useRef(0)
+  const mapView = useRef<{ bbox: Bbox; zoom: number } | null>(null)
+  const historyOpen = useRef(false)
+  const loadHistory = useCallback((featureId: string) => {
+    historyOpen.current = true
+    void fetchAudit(featureId)
+      .then((rows) => {
+        if (historyOpen.current) setAudit(rows)
+      })
+      .catch(() => {
+        if (historyOpen.current) setAudit([])
+      })
+  }, [])
+  const closeHistory = useCallback(() => {
+    historyOpen.current = false
+    setAudit((current) => (current === null ? current : null))
+  }, [])
+  const loadMapPhotos = useCallback((bbox: Bbox, zoom: number) => {
+    mapView.current = { bbox, zoom }
+    const request = ++photoRequest.current
+    if (zoom < PHOTO_MAP_ZOOM) {
+      setMapPhotos([])
+      return
+    }
+    void fetchPhotos({ bbox })
+      .then((rows) => {
+        if (request === photoRequest.current) setMapPhotos(rows)
+      })
+      .catch(() => {
+        if (request === photoRequest.current) setMapPhotos([])
+      })
+  }, [])
   siteRef.current = site
 
   const { locale, rest } = parseLocalePath(path)
@@ -111,10 +149,8 @@ function AtlasApp() {
   const onMap = !onPlaces
   const text = copy[locale]
   const otherLocale: SiteLocale = locale === 'en' ? 'zh-hk' : 'en'
-  const visible = useMemo(
-    () => filterCatalogCollection(mergeOverlay(catalog, overlay), year, NOW),
-    [catalog, overlay, year],
-  )
+  const visible = useMemo(() => mergeOverlay(catalog, overlay), [catalog, overlay])
+  const mapFocus = mapDistrict ? districtBbox(mapDistrict) : null
 
   const go = useCallback((next: string) => {
     window.history.pushState({}, '', next)
@@ -200,17 +236,42 @@ function AtlasApp() {
 
   useEffect(() => {
     if (!onMap) return
-    void fetchOverlay(HK_BBOX, year)
+    void fetchOverlay(HK_BBOX)
       .then(setOverlay)
       .catch(() => setOverlay([]))
-  }, [year, onMap])
+  }, [onMap])
+
+  useEffect(() => {
+    if (
+      !shouldLoadRecent({
+        onMap,
+        selected: Boolean(selected),
+        siteOpen: Boolean(site),
+        featurePath: Boolean(featurePath?.slug),
+      })
+    ) {
+      return
+    }
+    let cancelled = false
+    void fetchRecent()
+      .then((items) => {
+        if (!cancelled) setRecent(items)
+      })
+      .catch(() => {
+        if (!cancelled) setRecent([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [onMap, selected, site, featurePath?.slug])
 
   useEffect(() => {
     if (onPlaces || !featurePath) {
       if (!onPlaces && !featurePath) {
         setSelected((current) => (current ? null : current))
         setEdges((current) => (current.length ? [] : current))
-        setAudit((current) => (current.length ? [] : current))
+        historyOpen.current = false
+        setAudit((current) => (current === null ? current : null))
       }
       return
     }
@@ -222,7 +283,8 @@ function AtlasApp() {
           const stub = catalog.features.find((item) => item.properties.slug === featurePath.slug)
           setSelected(stub ? catalogFeatureToFeature(stub) : null)
           setEdges([])
-          setAudit([])
+          historyOpen.current = false
+          setAudit(null)
           return
         }
         setSelected(feature)
@@ -231,11 +293,8 @@ function AtlasApp() {
         } catch {
           setEdges([])
         }
-        try {
-          setAudit(await fetchAudit(feature.id))
-        } catch {
-          setAudit([])
-        }
+        historyOpen.current = false
+        setAudit(null)
       })
       .catch(() => {
         if (!cancelled) setSelected(null)
@@ -251,7 +310,7 @@ function AtlasApp() {
       bboxRef.current = bbox
       const gisBbox = gisAroundPoint(lng, lat) ?? bbox
       const [features, buildings, lots] = await Promise.all([
-        loadNearby(gisBbox, year, catalog),
+        loadNearby(gisBbox, catalog),
         fetchBuildingsInWgsBounds(gisBbox.west, gisBbox.south, gisBbox.east, gisBbox.north).catch(() => []),
         fetchLotsInWgsBounds(gisBbox.west, gisBbox.south, gisBbox.east, gisBbox.north).catch(() => []),
       ])
@@ -267,7 +326,7 @@ function AtlasApp() {
         }),
       )
     },
-    [catalog, year],
+    [catalog],
   )
 
   useEffect(() => {
@@ -281,14 +340,14 @@ function AtlasApp() {
       east: lng + 0.003,
       north: lat + 0.003,
     })
-  }, [selected, year, openSite, onMap])
+  }, [selected, openSite, onMap])
 
   useEffect(() => {
     if (!onMap || selectedRef.current) return
     const current = siteRef.current
     const bbox = bboxRef.current
     if (current && bbox) void openSite(current.lng, current.lat, bbox)
-  }, [year, openSite, onMap])
+  }, [openSite, onMap])
 
   function closePanel() {
     bboxRef.current = null
@@ -297,7 +356,7 @@ function AtlasApp() {
     setSite(null)
     setSelected(null)
     setEdges([])
-    setAudit([])
+    closeHistory()
     go(canonicalPath(locale, '/'))
   }
 
@@ -310,16 +369,28 @@ function AtlasApp() {
     setHitId(nextHitId)
     setSelected(null)
     setEdges([])
-    setAudit([])
+    closeHistory()
     void openSite(lng, lat, bbox)
   }
 
-  function selectSlug(slug: string) {
-    const kind =
-      nearby.find((feature) => feature.slug === slug)?.kind
+  function selectSlug(slug: string, kind?: Feature['kind']) {
+    const resolved =
+      kind
+      ?? nearby.find((feature) => feature.slug === slug)?.kind
       ?? catalog.features.find((feature) => feature.properties.slug === slug)?.properties.kind
       ?? 'establishment'
-    go(featurePublicPath(locale, kind, slug))
+    go(featurePublicPath(locale, resolved, slug))
+  }
+
+  function openPhoto(featureId: string) {
+    const catalogHit = catalog.features.find((feature) => feature.properties.id === featureId)
+    if (catalogHit) {
+      selectSlug(catalogHit.properties.slug, catalogHit.properties.kind)
+      return
+    }
+    const known =
+      overlay.find((feature) => feature.id === featureId) ?? nearby.find((feature) => feature.id === featureId)
+    if (known) selectSlug(known.slug, known.kind)
   }
 
   const panelFeatures = mergeSelected(nearby, selected)
@@ -356,17 +427,16 @@ function AtlasApp() {
           </nav>
         </div>
         <nav className="lang-switch" aria-label="Language">
-          <a href={`/${locale}${search}`} aria-current="page" onClick={(event) => event.preventDefault()}>
-            {text.language}
-          </a>
           <a
             href={`${switchLocalePath(path, otherLocale)}${search}`}
+            hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
+            lang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
             onClick={(event) => {
               event.preventDefault()
               go(`${switchLocalePath(path, otherLocale)}${search}`)
             }}
           >
-            {copy[otherLocale].language}
+            {text.otherLanguage}
           </a>
           {auth && !user ? (
             <a href={`/api/auth/google?return=${encodeURIComponent(path + search)}`}>{text.signIn}</a>
@@ -393,6 +463,7 @@ function AtlasApp() {
               decade: browse.decade,
             }}
             onBrowse={browseDirectory}
+            user={user}
             onSelectSlug={selectDirectorySlug}
             onViewMap={(slug, kind) => go(featurePublicPath(locale, kind, slug))}
           />
@@ -403,11 +474,24 @@ function AtlasApp() {
             <AtlasMap
               catalog={visible}
               selectedId={selected?.id ?? hitId}
+              focus={mapFocus}
               buildings={site?.buildings ?? []}
               lots={site?.lots ?? []}
+              photos={mapPhotos}
               onPointClick={openPoint}
+              onPhotoClick={openPhoto}
+              onView={loadMapPhotos}
             />
-            <YearSlider min={MIN_YEAR} max={NOW} value={year} onChange={setYear} />
+            <MapRegionChips
+              locale={locale}
+              region={mapRegion}
+              district={mapDistrict}
+              onRegion={(slug) => {
+                setMapRegion(slug)
+                setMapDistrict(null)
+              }}
+              onDistrict={setMapDistrict}
+            />
           </div>
           <aside className="sidebar" id="site-panel">
             {error ? <p className="error">{error}</p> : null}
@@ -443,7 +527,7 @@ function AtlasApp() {
                       setCreating(false)
                       setSelected(saved)
                       go(featurePublicPath(locale, saved.kind, saved.slug))
-                      void fetchAudit(saved.id).then(setAudit).catch(() => setAudit([]))
+                      closeHistory()
                     })
                     .catch((err: Error) => setFormError(err.message))
                 }}
@@ -469,6 +553,7 @@ function AtlasApp() {
                 features={panelFeatures}
                 selected={selected}
                 edges={edges}
+                recent={recent}
                 onSelectSlug={selectSlug}
                 onClose={closePanel}
                 onBack={
@@ -498,6 +583,23 @@ function AtlasApp() {
                     : undefined
                 }
                 audit={audit}
+                onShowHistory={selected ? () => loadHistory(selected.id) : undefined}
+                photos={
+                  selected ? (
+                    <PlacePhotos
+                      featureId={selected.id}
+                      placeName={displayNames(selected, locale).title}
+                      canUpload={Boolean(user) && selected.lng != null && selected.lat != null}
+                      userSub={user?.sub ?? null}
+                      locale={locale}
+                      onChange={() => {
+                        const view = mapView.current
+                        if (view) loadMapPhotos(view.bbox, view.zoom)
+                        if (historyOpen.current) loadHistory(selected.id)
+                      }}
+                    />
+                  ) : null
+                }
                 onRevert={
                   user && selected
                     ? (id) => {
@@ -515,7 +617,7 @@ function AtlasApp() {
                             ])
                             setSelected(result)
                             go(featurePublicPath(locale, result.kind, result.slug))
-                            void fetchAudit(result.id).then(setAudit).catch(() => setAudit([]))
+                            loadHistory(result.id)
                           })
                           .catch((err: Error) => setError(err.message))
                       }

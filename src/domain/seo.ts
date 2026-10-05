@@ -321,6 +321,18 @@ export function injectSeoHead(html: string, head: SeoHead, measurementId?: strin
   return next
 }
 
+export function browserOrigin(
+  requestUrl: string,
+  configuredOrigin: string | undefined,
+  headers: { ip: string | null; ray: string | null },
+): string {
+  const url = new URL(requestUrl)
+  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+  const localWorker = headers.ip === '127.0.0.1' && !headers.ray
+  if (loopback || localWorker) return 'http://localhost:5173'
+  return configuredOrigin || url.origin
+}
+
 export function canonicalHostRedirect(requestUrl: string, publicOrigin: string): string | null {
   const url = new URL(requestUrl)
   if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return null

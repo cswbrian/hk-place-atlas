@@ -1,6 +1,6 @@
 import { parseApiRoute, type ApiRoute } from '../src/api/router'
 import { featureRowToFeature, featureToRow, parseBbox, type Bbox, type FeatureRow } from '../src/domain/featureQuery'
-import { featureStandingInYear, slugify } from '../src/domain/feature'
+import { slugify } from '../src/domain/feature'
 import {
   clearCookie,
   cookieValue,
@@ -22,6 +22,8 @@ import {
   placesListItemFromRow,
   placesOrderSql,
 } from '../src/domain/placesQuery'
+import { RECENT_LIMIT, recentItemFromRow, recentListSql } from '../src/domain/recent'
+import { publicReadCacheSeconds, type PublicRead } from './publicCache'
 import {
   CSDI_WFS,
   GIS_CACHE_SECONDS,
@@ -35,6 +37,7 @@ import {
 } from '../src/domain/gis'
 import { featurePublicPath } from '../src/domain/locale'
 import {
+  browserOrigin,
   canonicalHostRedirect,
   featureSeoHead,
   gtagSnippet,
@@ -63,10 +66,24 @@ import {
   wikiSlug,
 } from '../src/domain/wiki'
 import { clampLotBbox, wgsToHk80 } from '../src/ui/lots/hk80'
+import { PHOTO_MAX_BYTES } from '../src/domain/photo'
+import { createPhoto, removePhoto, type PhotoBucket, type StoredPhoto } from './photos'
+
+type ImageHandle = {
+  transform(options: { width: number }): ImageHandle
+  output(options: { format: string; quality?: number }): Promise<{ response(): Response }>
+}
+
+type ImagesBinding = {
+  info(stream: ReadableStream): Promise<{ format?: string }>
+  input(source: ReadableStream | ArrayBuffer): ImageHandle
+}
 
 export type Env = {
   DB: D1Database
   ASSETS?: Fetcher
+  PHOTOS?: R2Bucket
+  IMAGES?: ImagesBinding
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
   SESSION_SECRET?: string
@@ -125,9 +142,10 @@ async function handleSeoPage(request: Request, env: Env, seo: SeoPath): Promise<
 }
 
 function publicOrigin(request: Request, env: Env): string {
-  const url = new URL(request.url)
-  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return 'http://localhost:5173'
-  return env.PUBLIC_ORIGIN || url.origin
+  return browserOrigin(request.url, env.PUBLIC_ORIGIN, {
+    ip: request.headers.get('cf-connecting-ip'),
+    ray: request.headers.get('cf-ray'),
+  })
 }
 
 function redirect(location: string, status = 301): Response {
@@ -195,10 +213,11 @@ async function audit(
   entityId: string,
   before: unknown,
   after: unknown,
+  entityType = 'feature',
 ) {
   await env.DB.prepare(
     `INSERT INTO audit_log (id, at, actor_sub, actor_email, action, entity_type, entity_id, before_json, after_json)
-     VALUES (?, ?, ?, ?, ?, 'feature', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -206,6 +225,7 @@ async function audit(
       actor.sub,
       actor.email,
       action,
+      entityType,
       entityId,
       before ? JSON.stringify(before) : null,
       after ? JSON.stringify(after) : null,
@@ -297,9 +317,7 @@ async function listInBbox(request: Request, env: Env, touchedOnly: boolean): Pro
   const url = new URL(request.url)
   const bbox = parseBbox(url.searchParams.get('bbox'))
   if (!bbox) return json({ error: 'bbox is required' }, 400)
-  const year = Number(url.searchParams.get('year'))
   const kind = url.searchParams.get('kind')
-  const now = new Date().getFullYear()
   let sql = 'SELECT * FROM features WHERE lng >= ? AND lng <= ? AND lat >= ? AND lat <= ?'
   const binds: (string | number)[] = [bbox.west, bbox.east, bbox.south, bbox.north]
   if (touchedOnly) sql += ' AND touched = 1'
@@ -310,11 +328,7 @@ async function listInBbox(request: Request, env: Env, touchedOnly: boolean): Pro
   sql += ' LIMIT ?'
   binds.push(LIST_CAP)
   const { results } = await env.DB.prepare(sql).bind(...binds).all<FeatureRow>()
-  const features = (results ?? []).map(featureRowToFeature)
-  const filtered = Number.isInteger(year)
-    ? features.filter((feature) => featureStandingInYear(feature, year, now))
-    : features
-  return json(filtered)
+  return json((results ?? []).map(featureRowToFeature))
 }
 
 async function handleAuthGoogle(request: Request, env: Env): Promise<Response> {
@@ -455,11 +469,19 @@ async function handleDelete(request: Request, env: Env, slug: string): Promise<R
 
 async function handleAuditList(env: Env, featureId: string): Promise<Response> {
   const { results } = await env.DB.prepare(
-    `SELECT id, at, actor_email, action, entity_id, before_json, after_json
-     FROM audit_log WHERE entity_type = 'feature' AND entity_id = ?
+    `SELECT id, at, actor_email, action, entity_type, entity_id, before_json, after_json
+     FROM audit_log
+     WHERE (entity_type = 'feature' AND entity_id = ?)
+        OR (
+          entity_type = 'photo'
+          AND (
+            json_extract(after_json, '$.featureId') = ?
+            OR json_extract(before_json, '$.featureId') = ?
+          )
+        )
      ORDER BY at DESC LIMIT 50`,
   )
-    .bind(featureId)
+    .bind(featureId, featureId, featureId)
     .all()
   const entries = (results ?? []).flatMap((row) => {
     const parsed = parseAuditRow(row)
@@ -517,9 +539,7 @@ async function handleSearch(request: Request, env: Env): Promise<Response> {
   const fts = fts5Query(raw)
   const han = hanNeedle(raw)
   if (!fts && !han) return json([])
-  const year = Number(url.searchParams.get('year'))
   const kind = url.searchParams.get('kind')
-  const now = new Date().getFullYear()
 
   const ftsIds: string[] = []
   if (fts) {
@@ -553,13 +573,10 @@ async function handleSearch(request: Request, env: Env): Promise<Response> {
   const placeholders = ids.map(() => '?').join(',')
   const { results } = await env.DB.prepare(`SELECT * FROM features WHERE id IN (${placeholders})`).bind(...ids).all<FeatureRow>()
   const byId = new Map((results ?? []).map((row) => [row.id, featureRowToFeature(row)]))
-  let features = ids.flatMap((id) => {
+  const features = ids.flatMap((id) => {
     const feature = byId.get(id)
     return feature ? [feature] : []
   })
-  if (Number.isInteger(year)) {
-    features = features.filter((feature) => featureStandingInYear(feature, year, now))
-  }
   return json(features.slice(0, SEARCH_LIMIT))
 }
 
@@ -668,6 +685,52 @@ async function handlePlacesList(request: Request, env: Env): Promise<Response> {
   })
 }
 
+async function serveCached(
+  request: Request,
+  ctx: ExecutionContext,
+  maxAge: number,
+  load: () => Promise<Response>,
+): Promise<Response> {
+  const url = new URL(request.url)
+  url.searchParams.sort()
+  const key = new Request(url.toString(), { method: 'GET' })
+  const hit = await caches.default.match(key)
+  if (hit) return hit
+  const fresh = await load()
+  if (fresh.status !== 200) return fresh
+  const headers = new Headers(fresh.headers)
+  headers.set('cache-control', `public, max-age=${maxAge}`)
+  const response = new Response(fresh.body, { status: fresh.status, headers })
+  ctx.waitUntil(caches.default.put(key, response.clone()))
+  return response
+}
+
+function cachedRead(
+  request: Request,
+  ctx: ExecutionContext,
+  route: PublicRead,
+  load: () => Promise<Response>,
+): Promise<Response> {
+  const maxAge = publicReadCacheSeconds(route, request.method)
+  if (!maxAge) return load()
+  return serveCached(request, ctx, maxAge, load)
+}
+
+async function handleRecent(env: Env): Promise<Response> {
+  const { results } = await env.DB.prepare(recentListSql())
+    .bind(RECENT_LIMIT)
+    .all<{
+      slug: string
+      kind: string
+      name_en: string
+      name_zh: string
+      start_year: number | null
+      end_year: number | null
+      updated_at: string
+    }>()
+  return json({ features: (results ?? []).map(recentItemFromRow) })
+}
+
 function hk80FromWgs(bbox: Bbox): [number, number, number, number] {
   const [minX, minY] = wgsToHk80(bbox.west, bbox.south)
   const [maxX, maxY] = wgsToHk80(bbox.east, bbox.north)
@@ -729,6 +792,202 @@ async function handleGis(request: Request, route: ApiRoute, ctx: ExecutionContex
   return response
 }
 
+const PHOTO_LIST_CAP = 200
+
+type PhotoListRow = {
+  id: string
+  feature_id: string
+  lng: number
+  lat: number
+  source: string
+  remarks: string
+  source_url: string
+  original_key: string
+  map_key: string
+  panel_key: string
+  created_at: string
+  created_by: string
+}
+
+function photoBucket(env: Env): PhotoBucket | null {
+  if (!env.PHOTOS || !env.IMAGES) return null
+  const images = env.IMAGES
+  const bucket = env.PHOTOS
+  return {
+    async findPlace(id) {
+      return env.DB.prepare('SELECT id, lng, lat FROM features WHERE id = ?')
+        .bind(id)
+        .first<{ id: string; lng: number | null; lat: number | null }>()
+    },
+    async put(key, body, contentType) {
+      await bucket.put(key, body, { httpMetadata: { contentType } })
+    },
+    async delete(key) {
+      await bucket.delete(key)
+    },
+    async insert(row) {
+      await env.DB.prepare(
+        `INSERT INTO photos (
+          id, feature_id, lng, lat, source, remarks, source_url,
+          original_key, map_key, panel_key, created_at, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          row.id,
+          row.featureId,
+          row.lng,
+          row.lat,
+          row.source,
+          row.remarks,
+          row.sourceUrl,
+          row.originalKey,
+          row.mapKey,
+          row.panelKey,
+          row.createdAt,
+          row.createdBy,
+        )
+        .run()
+    },
+    async deleteRow(id) {
+      await env.DB.prepare('DELETE FROM photos WHERE id = ?').bind(id).run()
+    },
+    async inspect(bytes) {
+      try {
+        const info = await images.info(new Blob([bytes]).stream())
+        return typeof info.format === 'string' && info.format.length > 0
+      } catch {
+        return false
+      }
+    },
+    async thumbnail(bytes, edge) {
+      const rendered = (
+        await images
+          .input(new Blob([bytes]).stream())
+          .transform({ width: edge })
+          .output({ format: 'image/webp', quality: edge <= 96 ? 70 : 75 })
+      ).response()
+      if (!rendered.ok) throw new Error('thumbnail failed')
+      return rendered.arrayBuffer()
+    },
+  }
+}
+
+function photoFromRow(row: PhotoListRow) {
+  return {
+    id: row.id,
+    featureId: row.feature_id,
+    lng: row.lng,
+    lat: row.lat,
+    source: row.source,
+    remarks: row.remarks,
+    sourceUrl: row.source_url,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+  }
+}
+
+async function handlePhotoList(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const featureId = url.searchParams.get('featureId')
+  const bbox = parseBbox(url.searchParams.get('bbox'))
+  if (!featureId && !bbox) return json({ error: 'featureId or bbox is required' }, 400)
+  let sql =
+    'SELECT id, feature_id, lng, lat, source, remarks, source_url, original_key, map_key, panel_key, created_at, created_by FROM photos WHERE 1 = 1'
+  const binds: (string | number)[] = []
+  if (featureId) {
+    sql += ' AND feature_id = ?'
+    binds.push(featureId)
+  }
+  if (bbox) {
+    sql += ' AND lng >= ? AND lng <= ? AND lat >= ? AND lat <= ?'
+    binds.push(bbox.west, bbox.east, bbox.south, bbox.north)
+  }
+  sql += ' ORDER BY created_at DESC LIMIT ?'
+  binds.push(PHOTO_LIST_CAP)
+  const { results } = await env.DB.prepare(sql).bind(...binds).all<PhotoListRow>()
+  return json({ photos: (results ?? []).map(photoFromRow) })
+}
+
+async function handlePhotoCreate(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  const store = photoBucket(env)
+  if (!store) return json({ error: 'photos not configured' }, 503)
+  let form: FormData
+  try {
+    form = await request.formData()
+  } catch {
+    return json({ error: 'file' }, 400)
+  }
+  const file = form.get('file')
+  if (!(file instanceof File) || file.size <= 0 || file.size > PHOTO_MAX_BYTES) {
+    return json({ error: 'file' }, 400)
+  }
+  const result = await createPhoto(store, {
+    id: crypto.randomUUID(),
+    featureId: String(form.get('featureId') ?? ''),
+    source: String(form.get('source') ?? ''),
+    remarks: String(form.get('remarks') ?? ''),
+    sourceUrl: String(form.get('sourceUrl') ?? ''),
+    bytes: await file.arrayBuffer(),
+    createdAt: new Date().toISOString(),
+    createdBy: session.sub,
+  })
+  if (!result.ok) return json({ error: result.error }, result.error === 'store' ? 500 : 400)
+  await audit(env, session, 'put', result.photo.id, null, result.photo, 'photo')
+  return json(result.photo, 201)
+}
+
+async function handlePhotoDelete(request: Request, env: Env, id: string): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  const store = photoBucket(env)
+  if (!store) return json({ error: 'photos not configured' }, 503)
+  const row = await env.DB.prepare(
+    'SELECT id, feature_id, lng, lat, source, remarks, source_url, original_key, map_key, panel_key, created_at, created_by FROM photos WHERE id = ?',
+  )
+    .bind(id)
+    .first<PhotoListRow>()
+  if (!row) return json({ error: 'not found' }, 404)
+  const stored: StoredPhoto = {
+    id: row.id,
+    featureId: row.feature_id,
+    lng: row.lng,
+    lat: row.lat,
+    source: row.source,
+    remarks: row.remarks,
+    sourceUrl: row.source_url,
+    originalKey: row.original_key,
+    mapKey: row.map_key,
+    panelKey: row.panel_key,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+  }
+  const removed = await removePhoto(store, stored, session.sub)
+  if (removed === 'forbidden') return json({ error: 'forbidden' }, 403)
+  await audit(env, session, 'delete', stored.id, photoFromRow(row), null, 'photo')
+  return json({ ok: true })
+}
+
+async function handlePhotoThumb(request: Request, env: Env, id: string): Promise<Response> {
+  const size = new URL(request.url).searchParams.get('size')
+  if (size !== 'map' && size !== 'panel') return json({ error: 'size' }, 400)
+  if (!env.PHOTOS) return json({ error: 'photos not configured' }, 503)
+  const row = await env.DB.prepare('SELECT map_key, panel_key FROM photos WHERE id = ?')
+    .bind(id)
+    .first<{ map_key: string; panel_key: string }>()
+  if (!row) return json({ error: 'not found' }, 404)
+  const object = await env.PHOTOS.get(size === 'map' ? row.map_key : row.panel_key)
+  if (!object) return json({ error: 'not found' }, 404)
+  const headers = new Headers()
+  object.writeHttpMetadata(headers)
+  headers.set('cache-control', 'public, max-age=31536000, immutable')
+  if (!headers.get('content-type')) headers.set('content-type', 'image/webp')
+  return new Response(object.body, { headers })
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
@@ -740,8 +999,11 @@ export default {
       if (rootRedirect) return redirect(rootRedirect)
       if (url.pathname === '/robots.txt') return textPlain(robotsTxt(origin))
       if (url.pathname === '/llms.txt') return textPlain(llmsTxt(origin))
-      const sitemap = await handleSitemap(env, origin, url.pathname)
-      if (sitemap) return sitemap
+      if (parseSitemapPath(url.pathname)) {
+        return cachedRead(request, ctx, { type: 'sitemap' }, async () => {
+          return (await handleSitemap(env, origin, url.pathname)) ?? json({ error: 'not found' }, 404)
+        })
+      }
     }
     const route = parseApiRoute(url)
     if (!route) {
@@ -782,8 +1044,15 @@ export default {
       })
     }
     if (route.type === 'overlay' && request.method === 'GET') return listInBbox(request, env, true)
-    if (route.type === 'search' && request.method === 'GET') return handleSearch(request, env)
-    if (route.type === 'places' && request.method === 'GET') return handlePlacesList(request, env)
+    if (route.type === 'search' && request.method === 'GET') {
+      return cachedRead(request, ctx, route, () => handleSearch(request, env))
+    }
+    if (route.type === 'places' && request.method === 'GET') {
+      return cachedRead(request, ctx, route, () => handlePlacesList(request, env))
+    }
+    if (route.type === 'recent' && request.method === 'GET') {
+      return cachedRead(request, ctx, route, () => handleRecent(env))
+    }
     if (route.type === 'audit' && request.method === 'GET') return handleAuditList(env, route.featureId)
     if (route.type === 'auditRevert' && request.method === 'POST') return handleAuditRevert(request, env, route.id)
     if (route.type === 'list' && request.method === 'GET') return listInBbox(request, env, false)
@@ -795,6 +1064,10 @@ export default {
     }
     if (route.type === 'feature' && request.method === 'PUT') return handleWrite(request, env, route.slug)
     if (route.type === 'feature' && request.method === 'DELETE') return handleDelete(request, env, route.slug)
+    if (route.type === 'photos' && request.method === 'GET') return handlePhotoList(request, env)
+    if (route.type === 'photos' && request.method === 'POST') return handlePhotoCreate(request, env)
+    if (route.type === 'photo' && request.method === 'DELETE') return handlePhotoDelete(request, env, route.id)
+    if (route.type === 'photoThumb' && request.method === 'GET') return handlePhotoThumb(request, env, route.id)
     if (route.type === 'edges' && request.method === 'GET') {
       const { results } = await env.DB.prepare(
         `SELECT * FROM edges WHERE (from_id = ? AND from_type != 'csdi_building') OR (to_id = ? AND to_type != 'csdi_building')`,

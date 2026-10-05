@@ -28,12 +28,22 @@
     { "pattern": "hkatlas.fyi", "custom_domain": true },
     { "pattern": "www.hkatlas.fyi", "custom_domain": true }
   ],
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "hk-atlas-photos"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES"
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "hk-atlas",
       "database_id": "184f9665-3bae-4a6a-ac75-8f6853b25a71",
-      "migrations_dir": "worker/migrations"
+      "migrations_dir": "worker/migrations",
+      "remote": true
     }
   ],
   "vars": {

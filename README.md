@@ -19,14 +19,13 @@ npm run dev
 
 Open [http://localhost:5173/en](http://localhost:5173/en) or `/zh-hk`. Use **Map | Places** in the header, or open `/en/places` for the directory. `npm run seed -- --sample 2000` is a smaller local catalog.
 
-1. Clustered pins, no login.
+1. Clustered pins, no login. Every place with coordinates is shown, including demolished ones.
 2. Pan and zoom — clusters split.
-3. Scrub the year slider.
-4. Click a pin — site panel (names, dates, notes, sources, edges).
-5. Click the map — nearby features in view.
-6. Switch English / 繁.
-7. Browse all places on `/en/places` (A–Z, search, paginated).
-8. Read-only — no Add or Edit without sign-in.
+3. Click a pin — site panel (names, dates, notes, sources, edges).
+4. Click the map — nearby features in view.
+5. Switch English / 繁.
+6. Browse all places on `/en/places` (A–Z, search, paginated).
+7. Read-only — no Add or Edit without sign-in.
 
 `npm run seed` imports the full [BDBIAR_BDBIAR_converted.csv](BDBIAR_BDBIAR_converted.csv). Catalog GeoJSON is written to `public/catalog.geojson` (gitignored).
 

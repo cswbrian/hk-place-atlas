@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Feature } from './feature'
 import {
   canonicalHostRedirect,
+  browserOrigin,
   crawlerBodyHtml,
   escapeHtml,
   featureJsonLd,
@@ -176,6 +177,32 @@ describe('featureSeoHead', () => {
     const zh = featureSeoHead(stub, 'https://hkatlas.fyi', 'zh-hk')
     expect(zh.title).toBe('金高大廈 · 香港地圖集')
     expect(zh.siteName).toBe('香港地圖集')
+  })
+})
+
+describe('browserOrigin', () => {
+  it('keeps a real production request on the public site', () => {
+    expect(
+      browserOrigin('https://hkatlas.fyi/api/auth/google', 'https://hkatlas.fyi', {
+        ip: '1.2.3.4',
+        ray: 'abc-HKG',
+      }),
+    ).toBe('https://hkatlas.fyi')
+  })
+
+  it('stays on localhost when wrangler rewrites the host to the production domain', () => {
+    expect(
+      browserOrigin('http://hkatlas.fyi/api/auth/google?return=%2Fen', 'https://hkatlas.fyi', {
+        ip: '127.0.0.1',
+        ray: null,
+      }),
+    ).toBe('http://localhost:5173')
+  })
+
+  it('stays on localhost for a direct loopback request', () => {
+    expect(browserOrigin('http://127.0.0.1:8787/api/auth/google', 'https://hkatlas.fyi', { ip: null, ray: null })).toBe(
+      'http://localhost:5173',
+    )
   })
 })
 

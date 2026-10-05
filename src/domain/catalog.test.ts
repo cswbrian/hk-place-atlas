@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { catalogStandingInYear, catalogFeatureToFeature, filterCatalogCollection, mergeOverlay } from './catalog'
+import { catalogFeatureToFeature, mergeOverlay } from './catalog'
 import type { CatalogGeojson } from './catalog'
 
 const collection: CatalogGeojson = {
@@ -49,32 +49,6 @@ const collection: CatalogGeojson = {
     },
   ],
 }
-
-describe('catalogStandingInYear', () => {
-  it('hides an occupancy pin after its end year', () => {
-    const demolished = {
-      id: 'a',
-      slug: 'old-1865',
-      kind: 'establishment' as const,
-      status: 'demolished',
-      startYear: 1865,
-      endYear: 1921,
-      nameEn: 'Old',
-      nameZh: '',
-    }
-    expect(catalogStandingInYear(demolished, 1921, 2026)).toBe(false)
-    expect(catalogStandingInYear(demolished, 1920, 2026)).toBe(true)
-  })
-})
-
-describe('filterCatalogCollection', () => {
-  it('keeps occupancy standing in year and events that overlap', () => {
-    const in1941 = filterCatalogCollection(collection, 1941, 2026)
-    expect(in1941.features.map((feature) => feature.properties.id)).toEqual(['a', 'c'])
-    const in1980 = filterCatalogCollection(collection, 1980, 2026)
-    expect(in1980.features.map((feature) => feature.properties.id)).toEqual(['a', 'b'])
-  })
-})
 
 describe('catalogFeatureToFeature', () => {
   it('copies point coordinates onto a stub feature', () => {

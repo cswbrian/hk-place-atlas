@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchPlaces } from './features'
+import { fetchPlaces, fetchRecent } from './features'
 
 describe('fetchPlaces', () => {
   afterEach(() => {
@@ -21,5 +21,18 @@ describe('fetchPlaces', () => {
     expect(url).toContain('district=yau-tsim-mong')
     expect(url).toContain('decade=1980')
     expect(url).toContain('q=garden')
+  })
+})
+
+describe('fetchRecent', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('loads the recent updates list', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ features: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchRecent()
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/recent')
   })
 })

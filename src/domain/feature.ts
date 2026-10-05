@@ -60,25 +60,6 @@ export function uniqueSlug(base: string, used: Set<string>): string {
   return next
 }
 
-export function featureStandingInYear(
-  feature: { kind: FeatureKind; start: FuzzyDate | null; end: FuzzyDate | null },
-  year: number,
-  now: number,
-): boolean {
-  if (feature.kind === 'event') {
-    if (!feature.start) return year === now
-    if (feature.start.year > year) return false
-    if (feature.end && feature.end.year < year) return false
-    return true
-  }
-  if (OCCUPANCY_KINDS.includes(feature.kind)) {
-    if (feature.end && year >= feature.end.year) return false
-    if (!feature.start) return year === now
-    return feature.start.year <= year
-  }
-  return false
-}
-
 export function featureAsEstablishment(feature: Feature): Establishment {
   return {
     id: feature.id,

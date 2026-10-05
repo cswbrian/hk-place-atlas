@@ -1,6 +1,7 @@
 import { formatFuzzyDate, primaryName } from '../domain/dates'
 import { lineageChain } from '../domain/lineage'
 import { linkText } from '../domain/links'
+import { copy, type SiteLocale } from '../domain/locale'
 import { formatBuildingSummary, formatLotSummary } from '../domain/lots'
 import { siteCluster } from '../domain/site'
 import type { Establishment, Relation, Source } from '../domain/types'
@@ -9,6 +10,7 @@ type Props = {
   establishment: Establishment
   establishments: Establishment[]
   relations: Relation[]
+  locale: SiteLocale
   onEdit?: () => void
   onSelect: (id: string) => void
   onBack?: () => void
@@ -25,10 +27,12 @@ export function EstablishmentDetail({
   establishment,
   establishments,
   relations,
+  locale,
   onEdit,
   onSelect,
   onBack,
 }: Props) {
+  const text = copy[locale]
   const site = siteCluster(establishments, establishment.id)
   const institution = lineageChain(relations, establishment.id, 'institution_successor')
   const lots = establishment.lots ?? []
@@ -44,7 +48,7 @@ export function EstablishmentDetail({
       {establishment.locationLabel && <p>{establishment.locationLabel}</p>}
       {buildings.length > 0 && (
         <section>
-          <h3>Buildings</h3>
+          <h3>{text.buildings}</h3>
           <ul className="lot-list">
             {buildings.map((building) => (
               <li key={building.buildingId}>
@@ -62,7 +66,7 @@ export function EstablishmentDetail({
       )}
       {lots.length > 0 && (
         <section>
-          <h3>Parcels</h3>
+          <h3>{text.parcels}</h3>
           <ul className="lot-list">
             {lots.map((lot) => (
               <li key={lot.number}>
@@ -79,15 +83,13 @@ export function EstablishmentDetail({
         </section>
       )}
       {establishment.notes && <p className="notes">{establishment.notes}</p>}
-      <LinkSection title="Sources" links={establishment.sources} />
-      <LinkSection title="Images" links={establishment.images ?? []} />
+      <LinkSection title={text.sources} links={establishment.sources} />
+      <LinkSection title={text.images} links={establishment.images ?? []} />
 
       <section>
-        <h3>
-          Same site <span className="zh">同址</span>
-        </h3>
+        <h3>{text.sameSite}</h3>
         {site.length <= 1 ? (
-          <p className="muted">No other recorded places on this site</p>
+          <p className="muted">{text.noOtherOnSite}</p>
         ) : (
           <ol>
             {site.map((id) => {
@@ -111,9 +113,9 @@ export function EstablishmentDetail({
         )}
       </section>
       <section>
-        <h3>Institution</h3>
+        <h3>{text.institution}</h3>
         {institution.length <= 1 ? (
-          <p className="muted">No institution links</p>
+          <p className="muted">{text.noInstitution}</p>
         ) : (
           <ol>
             {chainLabel(establishments, institution).map((label, index) => (
@@ -130,12 +132,12 @@ export function EstablishmentDetail({
       <div className="row">
         {onBack && (
           <button type="button" className="ghost" onClick={onBack}>
-            Back to site <span className="zh">返回此地</span>
+            {text.backToSite}
           </button>
         )}
         {onEdit ? (
           <button type="button" onClick={onEdit}>
-            Edit <span className="zh">編輯</span>
+            {text.edit}
           </button>
         ) : null}
       </div>

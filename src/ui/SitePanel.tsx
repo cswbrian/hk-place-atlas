@@ -1,5 +1,5 @@
 import { bilingualNames, catalogYear } from '../domain/dates'
-import { displayNames, type SiteLocale } from '../domain/locale'
+import { copy, displayNames, type SiteLocale } from '../domain/locale'
 import { formatBuildingSummary } from '../domain/lots'
 import { compareSiteOrder } from '../domain/site'
 import type { SiteQueryResult } from '../domain/querySite'
@@ -15,7 +15,6 @@ type Props = {
   locale?: SiteLocale
   labels?: {
     title: string
-    titleZh: string
     close: string
     empty: string
     add: string
@@ -46,6 +45,7 @@ function CatalogRow({
   meta,
   onTitle,
   onEdit,
+  editLabel,
 }: {
   year: string
   circa?: boolean
@@ -54,6 +54,7 @@ function CatalogRow({
   meta?: string | null
   onTitle?: () => void
   onEdit?: () => void
+  editLabel?: string
 }) {
   return (
     <li className="catalog-row">
@@ -71,7 +72,7 @@ function CatalogRow({
       </div>
       {onEdit ? (
         <button type="button" className="linkish" onClick={onEdit}>
-          Edit
+          {editLabel ?? 'Edit'}
         </button>
       ) : (
         <span />
@@ -91,7 +92,6 @@ export function SitePanel({
   labels,
 }: Props) {
   const title = labels?.title ?? 'This site'
-  const titleZh = labels?.titleZh ?? '此地'
   const closeLabel = labels?.close ?? 'Close'
   const emptyLabel = labels?.empty ?? 'Nothing recorded here yet. Add a place at this pin.'
   const addLabel = labels?.add ?? 'Add place'
@@ -100,13 +100,12 @@ export function SitePanel({
     .filter((establishment): establishment is Establishment => Boolean(establishment))
     .sort(compareSiteOrder)
   const empty = siteEstablishments.length === 0 && site.buildings.length === 0
+  const editLabel = copy[locale ?? 'en'].edit
 
   return (
     <article className="detail site-panel">
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h2>
-          {title} <span className="zh">{titleZh}</span>
-        </h2>
+        <h2>{title}</h2>
         <button type="button" className="linkish" onClick={onClose}>
           {closeLabel}
         </button>
@@ -142,6 +141,7 @@ export function SitePanel({
                   meta={location}
                   onTitle={() => onSelectEstablishment(establishment.id)}
                   onEdit={onEditEstablishment ? () => onEditEstablishment(establishment) : undefined}
+                  editLabel={editLabel}
                 />
               )
             })
