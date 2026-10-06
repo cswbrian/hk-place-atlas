@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   deleteFeature,
   fetchAudit,
@@ -23,6 +24,7 @@ import { featureAsEstablishment, type Feature } from './domain/feature'
 import { featureInBbox, type Bbox } from './domain/featureQuery'
 import {
   copy,
+  defaultPlaceRedirect,
   displayNames,
   featurePublicPath,
   parseFeaturePath,
@@ -95,6 +97,8 @@ function AtlasApp() {
   const [draft, setDraft] = useState<WikiDraft | null>(null)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [pinForm, setPinForm] = useState(false)
+  const pinCommit = useRef<((featureId: string) => Promise<void>) | null>(null)
   const [mapRegion, setMapRegion] = useState<string | null>(null)
   const [mapDistrict, setMapDistrict] = useState<string | null>(null)
   const [recent, setRecent] = useState<RecentItem[]>([])
@@ -151,6 +155,7 @@ function AtlasApp() {
     setSearch(url.search)
   }, [])
 
+  const openedDefaultPlace = useRef(false)
   useEffect(() => {
     const redirected = placesPageRedirect(path)
     if (redirected) {
@@ -158,6 +163,15 @@ function AtlasApp() {
       setPath(redirected)
       setSearch('')
       return
+    }
+    if (!openedDefaultPlace.current) {
+      const place = defaultPlaceRedirect(path)
+      if (place) {
+        window.history.replaceState({}, '', `${place}${search}`)
+        setPath(place)
+        return
+      }
+      openedDefaultPlace.current = true
     }
     const next = canonicalPath(locale, rest)
     const nextWithSearch = `${next}${search}`
@@ -421,7 +435,7 @@ function AtlasApp() {
           </div>
           <aside className="sidebar" id="site-panel">
             {error ? <p className="error">{error}</p> : null}
-            {draft ? (
+            {draft && !pinForm ? (
               <FeatureForm
                 locale={locale}
                 draft={draft}
@@ -429,6 +443,8 @@ function AtlasApp() {
                 error={formError}
                 onChange={setDraft}
                 onCancel={() => {
+                  pinCommit.current = null
+                  setPinForm(false)
                   setDraft(null)
                   setCreating(false)
                   setFormError(null)
@@ -444,13 +460,20 @@ function AtlasApp() {
                     creating ? undefined : selected?.slug,
                     creating ? undefined : selected?.updatedAt,
                   )
-                    .then((saved) => {
+                    .then(async (saved) => {
                       setOverlay((current) => [
                         ...current.filter((item) => item.id !== saved.id),
                         saved,
                       ])
+                      const commit = pinCommit.current
+                      pinCommit.current = null
+                      setPinForm(false)
                       setDraft(null)
                       setCreating(false)
+                      if (commit) {
+                        await commit(saved.id)
+                        return
+                      }
                       setSelected(saved)
                       go(featurePublicPath(locale, saved.kind, saved.slug))
                       closeHistory()
@@ -460,6 +483,7 @@ function AtlasApp() {
                 onDelete={
                   !creating && selected && wikiCanDelete(selected.id)
                     ? () => {
+                        if (!window.confirm(text.deletePlaceConfirm)) return
                         void deleteFeature(selected.slug, selected.updatedAt)
                           .then(() => {
                             setOverlay((current) => current.filter((item) => item.id !== selected.id))
@@ -518,6 +542,15 @@ function AtlasApp() {
                       canUpload={Boolean(user) && selected.lng != null && selected.lat != null}
                       userSub={user?.sub ?? null}
                       locale={locale}
+                      signInHref={`/api/auth/google?return=${encodeURIComponent(path + search)}`}
+                      onOpenPlace={selectSlug}
+                      onCreatePlace={(request) => {
+                        pinCommit.current = request.commit
+                        setFormError(null)
+                        setCreating(true)
+                        setPinForm(true)
+                        setDraft({ ...emptyWikiDraft(request.lng, request.lat), nameEn: request.nameEn })
+                      }}
                       onChange={() => {
                         const view = mapView.current
                         if (view) loadMapPhotos(view.bbox, view.zoom)
@@ -553,6 +586,45 @@ function AtlasApp() {
             )}
           </aside>
         </div>
+        {draft && pinForm
+          ? createPortal(
+              <div className="lightbox-form">
+                <FeatureForm
+                  locale={locale}
+                  draft={draft}
+                  creating={creating}
+                  error={formError}
+                  onChange={setDraft}
+                  onCancel={() => {
+                    pinCommit.current = null
+                    setPinForm(false)
+                    setDraft(null)
+                    setCreating(false)
+                    setFormError(null)
+                  }}
+                  onSave={() => {
+                    if (draft.lng == null || draft.lat == null) {
+                      setFormError(text.clickMap)
+                      return
+                    }
+                    setFormError(null)
+                    void saveFeature(wikiDraftToWrite(draft), undefined, undefined)
+                      .then(async (saved) => {
+                        setOverlay((current) => [...current.filter((item) => item.id !== saved.id), saved])
+                        const commit = pinCommit.current
+                        pinCommit.current = null
+                        setPinForm(false)
+                        setDraft(null)
+                        setCreating(false)
+                        if (commit) await commit(saved.id)
+                      })
+                      .catch((err: Error) => setFormError(err.message))
+                  }}
+                />
+              </div>,
+              document.body,
+            )
+          : null}
     </div>
   )
 }
