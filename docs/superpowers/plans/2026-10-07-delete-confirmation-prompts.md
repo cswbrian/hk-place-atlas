@@ -32,7 +32,7 @@ Vitest runs with `environment: 'node'` and UI tests use static markup, so handle
 - Modify: `src/domain/locale.ts`
 - Modify: `src/domain/locale.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `src/domain/locale.test.ts`:
 
@@ -49,13 +49,13 @@ describe('delete confirm copy', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run src/domain/locale.test.ts`
 
 Expected: FAIL — `deletePlaceConfirm` / `removeTagConfirm` missing on `copy`.
 
-- [ ] **Step 3: Add locale strings**
+- [x] **Step 3: Add locale strings**
 
 In `src/domain/locale.ts`, next to `deletePhotoConfirm` in both locales:
 
@@ -71,13 +71,13 @@ deletePlaceConfirm: '刪除此地？',
 removeTagConfirm: '移除此標記？',
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/domain/locale.test.ts`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domain/locale.ts src/domain/locale.test.ts
@@ -91,7 +91,7 @@ git commit -m "Add locale strings for place and tag delete confirms."
 **Files:**
 - Modify: `src/AtlasApp.tsx` (sidebar `FeatureForm` `onDelete` only; the pin-create portal form has no delete)
 
-- [ ] **Step 1: Gate the delete handler**
+- [x] **Step 1: Gate the delete handler**
 
 In `src/AtlasApp.tsx`, change the sidebar `onDelete` callback from:
 
@@ -134,7 +134,7 @@ onDelete={
 
 `text` is already `copy[locale]` in this component.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/AtlasApp.tsx
@@ -148,7 +148,7 @@ git commit -m "Confirm before deleting a wiki place."
 **Files:**
 - Modify: `src/ui/PhotoLightbox.tsx` (`remove` function)
 
-- [ ] **Step 1: Gate tag removal**
+- [x] **Step 1: Gate tag removal**
 
 In `src/ui/PhotoLightbox.tsx`, change:
 
@@ -179,13 +179,13 @@ async function remove(tag: PhotoTag) {
 }
 ```
 
-- [ ] **Step 2: Run related tests**
+- [x] **Step 2: Run related tests**
 
 Run: `npx vitest run src/domain/locale.test.ts src/ui/PlacePhotos.test.ts`
 
 Expected: PASS (photo delete confirm unchanged).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/ui/PhotoLightbox.tsx
