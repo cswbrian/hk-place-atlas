@@ -22,10 +22,8 @@ describe('parseApiRoute', () => {
     })
   })
 
-  it('matches the places directory list', () => {
-    expect(parseApiRoute(new URL('https://x/api/places?page=2&letter=J'))).toEqual({
-      type: 'places',
-    })
+  it('does not route the removed places directory', () => {
+    expect(parseApiRoute(new URL('https://x/api/places?page=2&letter=J'))).toBeNull()
   })
 
   it('matches the recent updates list', () => {

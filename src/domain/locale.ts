@@ -14,15 +14,6 @@ export type FeaturePath = {
 
 export type PlacesPath = { slug: string | null }
 
-export type PlacesBrowse = {
-  page?: number
-  letter?: string | null
-  q?: string | null
-  region?: string | null
-  district?: string | null
-  decade?: number | null
-}
-
 export const copy = {
   en: {
     title: 'HK Atlas',
@@ -199,22 +190,12 @@ export function parsePlacesPath(rest: string): PlacesPath | null {
   return { slug: decodeURIComponent(match[1]!) }
 }
 
-export function placesPublicPath(
-  locale: SiteLocale,
-  slug?: string | null,
-  browse: PlacesBrowse = {},
-): string {
-  const base = slug ? `/${locale}/places/${encodeURIComponent(slug)}` : `/${locale}/places`
-  const params = new URLSearchParams()
-  const q = browse.q?.trim()
-  if (q) params.set('q', q)
-  if (!q && browse.letter) params.set('letter', browse.letter)
-  if (browse.region) params.set('region', browse.region)
-  if (browse.district) params.set('district', browse.district)
-  if (browse.decade) params.set('decade', String(browse.decade))
-  if (browse.page && browse.page > 1) params.set('page', String(browse.page))
-  const query = params.toString()
-  return query ? `${base}?${query}` : base
+export function placesPageRedirect(pathname: string): string | null {
+  const { locale, rest } = parseLocalePath(pathname)
+  const places = parsePlacesPath(rest)
+  if (!places) return null
+  if (!places.slug) return `/${locale}`
+  return `/${locale}/place/${encodeURIComponent(places.slug)}`
 }
 
 export function featurePublicPath(locale: SiteLocale, kind: FeatureKind, slug: string): string {

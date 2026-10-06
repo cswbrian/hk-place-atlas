@@ -16,7 +16,6 @@ import {
   llmsTxt,
   parseSeoPath,
   parseSitemapPath,
-  placesSeoHead,
   robotsTxt,
   rootPathRedirect,
   schemaType,
@@ -66,27 +65,10 @@ describe('parseSeoPath', () => {
     expect(parseSeoPath('/assets/index.js')).toBeNull()
   })
 
-  it('reads the places directory and treats a selected slug as UI state', () => {
-    expect(parseSeoPath('/en/places')).toEqual({ type: 'places', locale: 'en', slug: null })
-    expect(parseSeoPath('/zh-hk/places/high-house-1981')).toEqual({
-      type: 'places',
-      locale: 'zh-hk',
-      slug: 'high-house-1981',
-    })
+  it('does not treat the removed directory as a page', () => {
+    expect(parseSeoPath('/en/places')).toBeNull()
+    expect(parseSeoPath('/zh-hk/places/high-house-1981')).toBeNull()
     expect(parseSeoPath('/en/place/high-house-1981')?.type).toBe('feature')
-  })
-})
-
-describe('placesSeoHead', () => {
-  it('indexes /places and canonicalizes /places/{slug} to the map URL', () => {
-    const dir = placesSeoHead('https://hkatlas.fyi', 'en')
-    expect(dir.canonical).toBe('https://hkatlas.fyi/en/places')
-    expect(dir.robots).toBe('index,follow')
-    expect(dir.title).toContain('Places')
-
-    const selected = placesSeoHead('https://hkatlas.fyi', 'en', stub)
-    expect(selected.canonical).toBe('https://hkatlas.fyi/en/place/high-house-1981')
-    expect(selected.title).toBe('HIGH HOUSE · HK Atlas')
   })
 })
 
@@ -245,11 +227,9 @@ describe('sitemapXml', () => {
     ])
     expect(xml).toContain('<loc>https://hkatlas.fyi/en</loc>')
     expect(xml).toContain('<loc>https://hkatlas.fyi/zh-hk</loc>')
-    expect(xml).toContain('<loc>https://hkatlas.fyi/en/places</loc>')
-    expect(xml).toContain('<loc>https://hkatlas.fyi/zh-hk/places</loc>')
+    expect(xml).not.toContain('/places')
     expect(xml).toContain('<loc>https://hkatlas.fyi/en/place/cafe-1990</loc>')
     expect(xml).toContain('<loc>https://hkatlas.fyi/zh-hk/event/fair-1997</loc>')
-    expect(xml).not.toContain('/places/cafe-1990')
     expect(xml).toContain('hreflang="zh-Hant"')
     expect(xml).toContain('xhtml:link')
   })
@@ -293,7 +273,7 @@ describe('llmsTxt', () => {
     const body = llmsTxt('https://hkatlas.fyi')
     expect(body).toContain('HK Atlas · 香港地圖集')
     expect(body).toContain('https://hkatlas.fyi/en')
-    expect(body).toContain('/en/places')
+    expect(body).not.toContain('/places')
     expect(body).toContain('/place/{slug}')
     expect(body).toContain('sitemap')
   })

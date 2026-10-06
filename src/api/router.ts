@@ -1,7 +1,6 @@
 export type ApiRoute =
   | { type: 'feature'; slug: string }
   | { type: 'list' }
-  | { type: 'places' }
   | { type: 'recent' }
   | { type: 'edges'; featureId: string }
   | { type: 'me' }
@@ -22,7 +21,6 @@ export type ApiRoute =
 export function parseApiRoute(url: URL): ApiRoute | null {
   const path = url.pathname.replace(/\/$/, '') || '/'
   if (path === '/api/features') return { type: 'list' }
-  if (path === '/api/places') return { type: 'places' }
   if (path === '/api/recent') return { type: 'recent' }
   const feature = /^\/api\/features\/([^/]+)$/.exec(path)
   if (feature) return { type: 'feature', slug: decodeURIComponent(feature[1]!) }

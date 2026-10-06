@@ -1,9 +1,7 @@
 import type { Feature } from '../domain/feature'
 import type { Bbox } from '../domain/featureQuery'
 import type { AuditEntry } from '../domain/audit'
-import type { PlacesListResponse } from '../domain/placesQuery'
 import type { RecentItem } from '../domain/recent'
-import type { SiteLocale } from '../domain/locale'
 
 export type { AuditEntry }
 
@@ -24,27 +22,6 @@ export async function fetchFeatureBySlug(slug: string): Promise<Feature | null> 
   if (response.status === 404) return null
   if (!response.ok) throw new Error('Could not load feature')
   return (await response.json()) as Feature
-}
-
-export async function fetchPlaces(input: {
-  locale: SiteLocale
-  page?: number
-  letter?: string | null
-  q?: string | null
-  region?: string | null
-  district?: string | null
-  decade?: number | null
-}): Promise<PlacesListResponse> {
-  const params = new URLSearchParams({ locale: input.locale })
-  if (input.page && input.page > 1) params.set('page', String(input.page))
-  if (input.q?.trim()) params.set('q', input.q.trim())
-  else if (input.letter) params.set('letter', input.letter)
-  if (input.region) params.set('region', input.region)
-  if (input.district) params.set('district', input.district)
-  if (input.decade) params.set('decade', String(input.decade))
-  const response = await fetch(`/api/places?${params}`)
-  if (!response.ok) throw new Error('Could not load places')
-  return (await response.json()) as PlacesListResponse
 }
 
 export async function fetchRecent(): Promise<RecentItem[]> {

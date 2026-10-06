@@ -1,11 +1,10 @@
 import type { Event, LandmarksOrHistoricalBuildings, LocalBusiness, WithContext } from 'schema-dts'
-import { copy, featurePublicPath, parseFeaturePath, parseLocalePath, parsePlacesPath, type SiteLocale } from './locale'
+import { copy, featurePublicPath, parseFeaturePath, parseLocalePath, type SiteLocale } from './locale'
 import type { Feature, FeatureKind } from './feature'
 
 export type SeoHome = { type: 'home'; locale: SiteLocale }
 export type SeoFeature = { type: 'feature'; locale: SiteLocale; group: 'place' | 'event'; slug: string }
-export type SeoPlaces = { type: 'places'; locale: SiteLocale; slug: string | null }
-export type SeoPath = SeoHome | SeoFeature | SeoPlaces
+export type SeoPath = SeoHome | SeoFeature
 
 export type HreflangLink = { hreflang: string; href: string }
 
@@ -38,8 +37,6 @@ export function parseSeoPath(pathname: string): SeoPath | null {
   const first = pathname.replace(/\/+$/, '').split('/').filter(Boolean)[0]
   if (first !== 'en' && first !== 'zh-hk') return null
   if (rest === '/') return { type: 'home', locale }
-  const places = parsePlacesPath(rest)
-  if (places) return { type: 'places', locale, slug: places.slug }
   const feature = parseFeaturePath(rest)
   if (!feature) return null
   return { type: 'feature', locale, group: feature.group, slug: feature.slug }
@@ -161,17 +158,12 @@ function ogLocaleAlternate(locale: SiteLocale): string {
 export function crawlerBodyHtml(
   input:
     | { type: 'home'; locale: SiteLocale }
-    | { type: 'places'; locale: SiteLocale }
     | { type: 'feature'; feature: Feature; locale: SiteLocale }
     | { type: 'notFound'; locale: SiteLocale },
 ): string {
   if (input.type === 'home') {
     const text = copy[input.locale]
     return `<main><h1>${escapeHtml(text.title)}</h1><p>${escapeHtml(text.tagline)}</p><p>Hong Kong · 香港</p></main>`
-  }
-  if (input.type === 'places') {
-    const text = copy[input.locale]
-    return `<main><h1>${escapeHtml(text.places)}</h1><p>${escapeHtml(text.tagline)}</p><p>Hong Kong · 香港</p></main>`
   }
   if (input.type === 'notFound') {
     const text = copy[input.locale]
@@ -235,31 +227,6 @@ export function homeSeoHead(origin: string, locale: SiteLocale): SeoHead {
     ogLocaleAlternate: ogLocaleAlternate(locale),
     siteName: siteName(locale),
     crawlerBody: crawlerBodyHtml({ type: 'home', locale }),
-  }
-}
-
-export function placesSeoHead(origin: string, locale: SiteLocale, feature?: Feature): SeoHead {
-  if (feature) {
-    const head = featureSeoHead(feature, origin, locale)
-    return head
-  }
-  return {
-    lang: htmlLang(locale),
-    title: `${copy[locale].places} · ${copy[locale].title}`,
-    description: copy[locale].tagline,
-    robots: 'index,follow',
-    canonical: `${origin}/${locale}/places`,
-    alternates: hreflangLinks(origin, '/places'),
-    jsonLd: {
-      ...homeJsonLd(origin, locale),
-      url: `${origin}/${locale}/places`,
-      name: `${copy[locale].places} · ${copy[locale].title}`,
-    },
-    ogType: 'website',
-    ogLocale: OG_LOCALE[locale],
-    ogLocaleAlternate: ogLocaleAlternate(locale),
-    siteName: siteName(locale),
-    crawlerBody: crawlerBodyHtml({ type: 'places', locale }),
   }
 }
 
@@ -418,10 +385,7 @@ export function sitemapXml(
       )
     }
   }
-  if (includeHomes) {
-    pushPair('')
-    pushPair('/places')
-  }
+  if (includeHomes) pushPair('')
   for (const feature of features) {
     const group = feature.kind === 'event' ? 'event' : 'place'
     pushPair(`/${group}/${feature.slug}`)
@@ -443,7 +407,6 @@ export function llmsTxt(origin: string): string {
     '',
     `- English: ${base}/en`,
     `- 繁體中文: ${base}/zh-hk`,
-    `- Places directory: ${base}/en/places and ${base}/zh-hk/places`,
     `- Places: ${base}/en/place/{slug} and ${base}/zh-hk/place/{slug}`,
     `- Events: ${base}/en/event/{slug} and ${base}/zh-hk/event/{slug}`,
     `- Sitemap: ${base}/sitemap.xml`,

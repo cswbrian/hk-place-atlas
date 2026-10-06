@@ -27,12 +27,10 @@ import {
   featurePublicPath,
   parseFeaturePath,
   parseLocalePath,
-  parsePlacesPath,
-  placesPublicPath,
+  placesPageRedirect,
   switchLocalePath,
   type SiteLocale,
 } from './domain/locale'
-import { parsePlacesListQuery } from './domain/placesQuery'
 import { querySite, type SiteQueryResult } from './domain/querySite'
 import { trackPageview } from './domain/analytics'
 import { districtBbox } from './domain/districtView'
@@ -41,7 +39,6 @@ import { AtlasMap } from './ui/AtlasMap'
 import { MapRegionChips } from './ui/MapRegionChips'
 import { FeatureForm, emptyWikiDraft, wikiDraftFromFeature, wikiDraftToWrite, type WikiDraft } from './ui/FeatureForm'
 import { FeaturePanel } from './ui/FeaturePanel'
-import { PlacesDirectory } from './ui/PlacesDirectory'
 import { gisAroundPoint } from './domain/gis'
 import { wikiCanDelete } from './domain/wiki'
 import { fetchBuildingsInWgsBounds } from './ui/buildings/buildingApi'
@@ -142,11 +139,6 @@ function AtlasApp() {
 
   const { locale, rest } = parseLocalePath(path)
   const featurePath = parseFeaturePath(rest)
-  const placesPath = parsePlacesPath(rest)
-  const placesSlug = placesPath?.slug ?? null
-  const onPlaces = placesPath != null
-  const browse = parsePlacesListQuery(new URLSearchParams(search), locale)
-  const onMap = !onPlaces
   const text = copy[locale]
   const otherLocale: SiteLocale = locale === 'en' ? 'zh-hk' : 'en'
   const visible = useMemo(() => mergeOverlay(catalog, overlay), [catalog, overlay])
@@ -159,28 +151,14 @@ function AtlasApp() {
     setSearch(url.search)
   }, [])
 
-  const browseDirectory = useCallback(
-    (next: {
-      page: number
-      letter: string | null
-      q: string | null
-      region: string | null
-      district: string | null
-      decade: number | null
-    }) => {
-      go(placesPublicPath(locale, placesSlug, next))
-    },
-    [go, locale, placesSlug],
-  )
-
-  const selectDirectorySlug = useCallback(
-    (slug: string | null) => {
-      go(placesPublicPath(locale, slug, browse))
-    },
-    [go, locale, browse.page, browse.letter, browse.q, browse.region, browse.district, browse.decade],
-  )
-
   useEffect(() => {
+    const redirected = placesPageRedirect(path)
+    if (redirected) {
+      window.history.replaceState({}, '', redirected)
+      setPath(redirected)
+      setSearch('')
+      return
+    }
     const next = canonicalPath(locale, rest)
     const nextWithSearch = `${next}${search}`
     if (`${window.location.pathname}${window.location.search}` !== nextWithSearch) {
@@ -189,14 +167,8 @@ function AtlasApp() {
       setSearch(search)
     }
     document.documentElement.lang = locale === 'zh-hk' ? 'zh-Hant-HK' : 'en'
-    if (onPlaces) {
-      document.title = `${text.places} · ${text.title}`
-    } else {
-      document.title = selected
-        ? `${displayNames(selected, locale).title} · ${text.title}`
-        : text.title
-    }
-  }, [locale, rest, text.title, text.places, selected, onPlaces, search])
+    document.title = selected ? `${displayNames(selected, locale).title} · ${text.title}` : text.title
+  }, [path, locale, rest, text.title, selected, search])
 
   useEffect(() => {
     const onPop = () => {
@@ -212,7 +184,6 @@ function AtlasApp() {
   }, [path, search])
 
   useEffect(() => {
-    if (!onMap) return
     fetch('/catalog.geojson')
       .then((response) => {
         if (!response.ok) throw new Error('missing catalog')
@@ -220,7 +191,7 @@ function AtlasApp() {
       })
       .then(setCatalog)
       .catch(() => setError('Run npm run seed to build the local catalog.'))
-  }, [onMap])
+  }, [])
 
   useEffect(() => {
     void fetchMe()
@@ -235,16 +206,15 @@ function AtlasApp() {
   }, [])
 
   useEffect(() => {
-    if (!onMap) return
     void fetchOverlay(HK_BBOX)
       .then(setOverlay)
       .catch(() => setOverlay([]))
-  }, [onMap])
+  }, [])
 
   useEffect(() => {
     if (
       !shouldLoadRecent({
-        onMap,
+        onMap: true,
         selected: Boolean(selected),
         siteOpen: Boolean(site),
         featurePath: Boolean(featurePath?.slug),
@@ -263,16 +233,14 @@ function AtlasApp() {
     return () => {
       cancelled = true
     }
-  }, [onMap, selected, site, featurePath?.slug])
+  }, [selected, site, featurePath?.slug])
 
   useEffect(() => {
-    if (onPlaces || !featurePath) {
-      if (!onPlaces && !featurePath) {
-        setSelected((current) => (current ? null : current))
-        setEdges((current) => (current.length ? [] : current))
-        historyOpen.current = false
-        setAudit((current) => (current === null ? current : null))
-      }
+    if (!featurePath) {
+      setSelected((current) => (current ? null : current))
+      setEdges((current) => (current.length ? [] : current))
+      historyOpen.current = false
+      setAudit((current) => (current === null ? current : null))
       return
     }
     let cancelled = false
@@ -302,7 +270,7 @@ function AtlasApp() {
     return () => {
       cancelled = true
     }
-  }, [featurePath?.slug, catalog, onPlaces])
+  }, [featurePath?.slug, catalog])
 
   const openSite = useCallback(
     async (lng: number, lat: number, bbox: Bbox) => {
@@ -331,7 +299,7 @@ function AtlasApp() {
 
   useEffect(() => {
     selectedRef.current = selected
-    if (!onMap || !selected || selected.lng == null || selected.lat == null) return
+    if (!selected || selected.lng == null || selected.lat == null) return
     const lng = selected.lng
     const lat = selected.lat
     void openSite(lng, lat, {
@@ -340,14 +308,14 @@ function AtlasApp() {
       east: lng + 0.003,
       north: lat + 0.003,
     })
-  }, [selected, openSite, onMap])
+  }, [selected, openSite])
 
   useEffect(() => {
-    if (!onMap || selectedRef.current) return
+    if (selectedRef.current) return
     const current = siteRef.current
     const bbox = bboxRef.current
     if (current && bbox) void openSite(current.lng, current.lat, bbox)
-  }, [openSite, onMap])
+  }, [openSite])
 
   function closePanel() {
     bboxRef.current = null
@@ -403,28 +371,6 @@ function AtlasApp() {
       <header className="chrome">
         <div className="chrome-brand">
           <h1>{text.title}</h1>
-          <nav className="view-switch" aria-label="Views">
-            <a
-              href={canonicalPath(locale, '/')}
-              aria-current={onMap ? 'page' : undefined}
-              onClick={(event) => {
-                event.preventDefault()
-                go(canonicalPath(locale, '/'))
-              }}
-            >
-              {text.map}
-            </a>
-            <a
-              href={placesPublicPath(locale)}
-              aria-current={onPlaces ? 'page' : undefined}
-              onClick={(event) => {
-                event.preventDefault()
-                go(placesPublicPath(locale))
-              }}
-            >
-              {text.places}
-            </a>
-          </nav>
         </div>
         <nav className="lang-switch" aria-label="Language">
           <a
@@ -449,27 +395,7 @@ function AtlasApp() {
           ) : null}
         </nav>
       </header>
-      {onPlaces ? (
-        <div className="workspace workspace-places">
-          <PlacesDirectory
-            locale={locale}
-            slug={placesSlug}
-            browse={{
-              page: browse.page,
-              letter: browse.letter,
-              q: browse.q,
-              region: browse.region,
-              district: browse.district,
-              decade: browse.decade,
-            }}
-            onBrowse={browseDirectory}
-            user={user}
-            onSelectSlug={selectDirectorySlug}
-            onViewMap={(slug, kind) => go(featurePublicPath(locale, kind, slug))}
-          />
-        </div>
-      ) : (
-        <div className="workspace">
+      <div className="workspace">
           <div className="map-stack">
             <AtlasMap
               catalog={visible}
@@ -627,7 +553,6 @@ function AtlasApp() {
             )}
           </aside>
         </div>
-      )}
     </div>
   )
 }

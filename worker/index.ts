@@ -13,15 +13,6 @@ import {
 } from '../src/domain/session'
 import { parseAuditRow, revertPlan } from '../src/domain/audit'
 import { SEARCH_FETCH, SEARCH_LIMIT, fts5Query, hanNeedle, mergeSearchIds } from '../src/domain/search'
-import { placesFilterSql } from '../src/domain/placesFilters'
-import {
-  clampPage,
-  letterSql,
-  OCCUPANCY_SQL,
-  parsePlacesListQuery,
-  placesListItemFromRow,
-  placesOrderSql,
-} from '../src/domain/placesQuery'
 import { RECENT_LIMIT, recentItemFromRow, recentListSql } from '../src/domain/recent'
 import { publicReadCacheSeconds, type PublicRead } from './publicCache'
 import {
@@ -35,7 +26,7 @@ import {
   parseParcelKind,
   parseSearchText,
 } from '../src/domain/gis'
-import { featurePublicPath } from '../src/domain/locale'
+import { featurePublicPath, placesPageRedirect } from '../src/domain/locale'
 import {
   browserOrigin,
   canonicalHostRedirect,
@@ -47,7 +38,6 @@ import {
   notFoundSeoHead,
   parseSeoPath,
   parseSitemapPath,
-  placesSeoHead,
   robotsTxt,
   rootPathRedirect,
   sitemapIndexXml,
@@ -125,12 +115,6 @@ async function handleSeoPage(request: Request, env: Env, seo: SeoPath): Promise<
   const shell = await spaShell(env, request)
   const measurementId = gaId(request, env)
   if (seo.type === 'home') return html(injectSeoHead(shell, homeSeoHead(origin, seo.locale), measurementId))
-  if (seo.type === 'places') {
-    if (!seo.slug) return html(injectSeoHead(shell, placesSeoHead(origin, seo.locale), measurementId))
-    const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(seo.slug).first<FeatureRow>()
-    if (!row) return html(injectSeoHead(shell, notFoundSeoHead(origin, seo.locale), measurementId), 404)
-    return html(injectSeoHead(shell, placesSeoHead(origin, seo.locale, featureRowToFeature(row)), measurementId))
-  }
   const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(seo.slug).first<FeatureRow>()
   if (!row) return html(injectSeoHead(shell, notFoundSeoHead(origin, seo.locale), measurementId), 404)
   const feature = featureRowToFeature(row)
@@ -580,111 +564,6 @@ async function handleSearch(request: Request, env: Env): Promise<Response> {
   return json(features.slice(0, SEARCH_LIMIT))
 }
 
-type PlacesListRow = {
-  slug: string
-  kind: string
-  name_en: string
-  name_zh: string
-  status: string
-  start_year: number | null
-  end_year: number | null
-}
-
-const PLACES_SEARCH_CAP = 100_000
-
-async function handlePlacesList(request: Request, env: Env): Promise<Response> {
-  const url = new URL(request.url)
-  const query = parsePlacesListQuery(
-    url.searchParams,
-    url.searchParams.get('locale') === 'zh-hk' ? 'zh-hk' : 'en',
-  )
-  const { pageSize, letter, q, region, district, decade, locale } = query
-  const filter = placesFilterSql({ region, district, decade })
-  const filterSql = filter.sql ? ` AND ${filter.sql}` : ''
-
-  if (q) {
-    const fts = fts5Query(q)
-    const han = hanNeedle(q)
-    if (!fts && !han) {
-      return json({ page: 1, pageSize, total: 0, features: [] })
-    }
-
-    const ftsIds: string[] = []
-    if (fts) {
-      const sql = `SELECT features.id AS id FROM features_fts JOIN features ON features.id = features_fts.id
-         WHERE features_fts MATCH ? AND ${OCCUPANCY_SQL}${filterSql} ORDER BY rank LIMIT ?`
-      try {
-        const { results } = await env.DB.prepare(sql).bind(fts, ...filter.binds, PLACES_SEARCH_CAP).all<{ id: string }>()
-        for (const row of results ?? []) ftsIds.push(row.id)
-      } catch {
-        /* index missing or MATCH rejected */
-      }
-    }
-
-    const hanIds: string[] = []
-    if (han) {
-      const like = likePattern(han)
-      const sql = `SELECT id FROM features WHERE (name_zh LIKE ? OR name_en LIKE ?) AND ${OCCUPANCY_SQL}${filterSql} LIMIT ?`
-      const { results } = await env.DB.prepare(sql).bind(like, like, ...filter.binds, PLACES_SEARCH_CAP).all<{ id: string }>()
-      for (const row of results ?? []) hanIds.push(row.id)
-    }
-
-    const ids = mergeSearchIds(ftsIds, hanIds, PLACES_SEARCH_CAP)
-    const total = ids.length
-    const page = clampPage(query.page, total, pageSize)
-    if (!ids.length) return json({ page, pageSize, total: 0, features: [] })
-
-    const offset = (page - 1) * pageSize
-    const pageIds = ids.slice(offset, offset + pageSize)
-    if (!pageIds.length) return json({ page, pageSize, total, features: [] })
-
-    const placeholders = pageIds.map(() => '?').join(',')
-    const { results } = await env.DB.prepare(
-      `SELECT id, slug, kind, name_en, name_zh, status, start_year, end_year FROM features WHERE id IN (${placeholders})`,
-    )
-      .bind(...pageIds)
-      .all<PlacesListRow & { id: string }>()
-    const byId = new Map((results ?? []).map((row) => [row.id, row]))
-    const features = pageIds.flatMap((id) => {
-      const row = byId.get(id)
-      return row ? [placesListItemFromRow(row)] : []
-    })
-    return json({ page, pageSize, total, features })
-  }
-
-  const letterFilter = letterSql(letter)
-  const whereParts = [OCCUPANCY_SQL]
-  const binds: (string | number)[] = []
-  if (letterFilter) {
-    whereParts.push(letterFilter.sql)
-    binds.push(...letterFilter.binds)
-  }
-  if (filter.sql) {
-    whereParts.push(filter.sql)
-    binds.push(...filter.binds)
-  }
-  const where = whereParts.join(' AND ')
-  const countRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM features WHERE ${where}`)
-    .bind(...binds)
-    .first<{ n: number }>()
-  const total = countRow?.n ?? 0
-  const page = clampPage(query.page, total, pageSize)
-  const offset = (page - 1) * pageSize
-  const order = placesOrderSql(locale)
-  const { results } = await env.DB.prepare(
-    `SELECT slug, kind, name_en, name_zh, status, start_year, end_year FROM features
-     WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
-  )
-    .bind(...binds, pageSize, offset)
-    .all<PlacesListRow>()
-  return json({
-    page,
-    pageSize,
-    total,
-    features: (results ?? []).map(placesListItemFromRow),
-  })
-}
-
 async function serveCached(
   request: Request,
   ctx: ExecutionContext,
@@ -997,6 +876,8 @@ export default {
       if (hostRedirect) return redirect(hostRedirect)
       const rootRedirect = rootPathRedirect(url.pathname, origin)
       if (rootRedirect) return redirect(rootRedirect)
+      const placesRedirect = placesPageRedirect(url.pathname)
+      if (placesRedirect) return redirect(`${origin}${placesRedirect}`)
       if (url.pathname === '/robots.txt') return textPlain(robotsTxt(origin))
       if (url.pathname === '/llms.txt') return textPlain(llmsTxt(origin))
       if (parseSitemapPath(url.pathname)) {
@@ -1046,9 +927,6 @@ export default {
     if (route.type === 'overlay' && request.method === 'GET') return listInBbox(request, env, true)
     if (route.type === 'search' && request.method === 'GET') {
       return cachedRead(request, ctx, route, () => handleSearch(request, env))
-    }
-    if (route.type === 'places' && request.method === 'GET') {
-      return cachedRead(request, ctx, route, () => handlePlacesList(request, env))
     }
     if (route.type === 'recent' && request.method === 'GET') {
       return cachedRead(request, ctx, route, () => handleRecent(env))

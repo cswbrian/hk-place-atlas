@@ -5,7 +5,7 @@ import {
   parseFeaturePath,
   parseLocalePath,
   parsePlacesPath,
-  placesPublicPath,
+  placesPageRedirect,
   switchLocalePath,
 } from './locale'
 
@@ -43,24 +43,14 @@ describe('parsePlacesPath', () => {
   })
 })
 
-describe('placesPublicPath', () => {
-  it('builds directory URLs and omits default browse params', () => {
-    expect(placesPublicPath('en')).toBe('/en/places')
-    expect(placesPublicPath('zh-hk', 'jardine-house-1973')).toBe('/zh-hk/places/jardine-house-1973')
-    expect(placesPublicPath('en', null, { letter: 'J', page: 2 })).toBe('/en/places?letter=J&page=2')
-    expect(placesPublicPath('en', 'foo', { page: 1 })).toBe('/en/places/foo')
-    expect(
-      placesPublicPath('en', null, {
-        q: 'garden',
-        region: 'kowloon',
-        district: 'yau-tsim-mong',
-        decade: 1980,
-      }),
-    ).toBe('/en/places?q=garden&region=kowloon&district=yau-tsim-mong&decade=1980')
-    expect(placesPublicPath('en', null, { letter: 'J', page: 2, region: 'kowloon' })).toBe(
-      '/en/places?letter=J&region=kowloon&page=2',
-    )
-    expect(placesPublicPath('en', null, { region: null, district: null, decade: null })).toBe('/en/places')
+describe('placesPageRedirect', () => {
+  it('sends the directory home to the map and a selected slug to the place page', () => {
+    expect(placesPageRedirect('/en/places')).toBe('/en')
+    expect(placesPageRedirect('/zh-hk/places')).toBe('/zh-hk')
+    expect(placesPageRedirect('/en/places/jardine-house-1973')).toBe('/en/place/jardine-house-1973')
+    expect(placesPageRedirect('/zh-hk/places/jardine-house-1973')).toBe('/zh-hk/place/jardine-house-1973')
+    expect(placesPageRedirect('/en/place/jardine-house-1973')).toBeNull()
+    expect(placesPageRedirect('/en')).toBeNull()
   })
 })
 
