@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  copy,
   displayNames,
   featurePublicPath,
+  defaultPlaceRedirect,
   parseFeaturePath,
   parseLocalePath,
   parsePlacesPath,
@@ -43,6 +45,16 @@ describe('parsePlacesPath', () => {
   })
 })
 
+describe('defaultPlaceRedirect', () => {
+  it('opens the map root on the P&O Building and leaves place pages alone', () => {
+    expect(defaultPlaceRedirect('/')).toBe('/en/place/po-building-second-generation-1966')
+    expect(defaultPlaceRedirect('/en')).toBe('/en/place/po-building-second-generation-1966')
+    expect(defaultPlaceRedirect('/zh-hk')).toBe('/zh-hk/place/po-building-second-generation-1966')
+    expect(defaultPlaceRedirect('/en/place/jardine-house-1973')).toBeNull()
+    expect(defaultPlaceRedirect('/en/places')).toBeNull()
+  })
+})
+
 describe('placesPageRedirect', () => {
   it('sends the directory home to the map and a selected slug to the place page', () => {
     expect(placesPageRedirect('/en/places')).toBe('/en')
@@ -76,5 +88,14 @@ describe('displayNames', () => {
       title: '般含閣',
       secondary: 'Bonham Towers',
     })
+  })
+})
+
+describe('delete confirm copy', () => {
+  it('asks before deleting a place or tag in both locales', () => {
+    expect(copy.en.deletePlaceConfirm).toBe('Delete this place?')
+    expect(copy.en.removeTagConfirm).toBe('Remove this tag?')
+    expect(copy['zh-hk'].deletePlaceConfirm).toBe('刪除此地？')
+    expect(copy['zh-hk'].removeTagConfirm).toBe('移除此標記？')
   })
 })
