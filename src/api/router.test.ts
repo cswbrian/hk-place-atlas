@@ -57,6 +57,19 @@ describe('parseApiRoute', () => {
       type: 'photoThumb',
       id: 'pic-1',
     })
+    expect(parseApiRoute(new URL('https://x/api/photos/pic-1/file'))).toEqual({
+      type: 'photoFile',
+      id: 'pic-1',
+    })
+    expect(parseApiRoute(new URL('https://x/api/photos/pic-1/tags'))).toEqual({
+      type: 'photoTags',
+      id: 'pic-1',
+    })
+    expect(parseApiRoute(new URL('https://x/api/photos/pic-1/tags/tag-1'))).toEqual({
+      type: 'photoTag',
+      id: 'pic-1',
+      tagId: 'tag-1',
+    })
   })
 
   it('ignores unknown paths', () => {

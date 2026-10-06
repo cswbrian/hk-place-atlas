@@ -31,7 +31,8 @@
   "r2_buckets": [
     {
       "binding": "PHOTOS",
-      "bucket_name": "hk-atlas-photos"
+      "bucket_name": "hk-atlas-photos",
+      "remote": true
     }
   ],
   "images": {

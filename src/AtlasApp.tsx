@@ -505,7 +505,6 @@ function AtlasApp() {
                 edges={edges}
                 recent={recent}
                 onSelectSlug={selectSlug}
-                onClose={closePanel}
                 onBack={
                   site
                     ? () => {
@@ -555,6 +554,27 @@ function AtlasApp() {
                         const view = mapView.current
                         if (view) loadMapPhotos(view.bbox, view.zoom)
                         if (historyOpen.current) loadHistory(selected.id)
+                      }}
+                    />
+                  ) : site ? (
+                    <PlacePhotos
+                      featureIds={site.establishmentIds}
+                      placeName={text.thisSite}
+                      canUpload={false}
+                      userSub={user?.sub ?? null}
+                      locale={locale}
+                      signInHref={`/api/auth/google?return=${encodeURIComponent(path + search)}`}
+                      onOpenPlace={selectSlug}
+                      onCreatePlace={(request) => {
+                        pinCommit.current = request.commit
+                        setFormError(null)
+                        setCreating(true)
+                        setPinForm(true)
+                        setDraft({ ...emptyWikiDraft(request.lng, request.lat), nameEn: request.nameEn })
+                      }}
+                      onChange={() => {
+                        const view = mapView.current
+                        if (view) loadMapPhotos(view.bbox, view.zoom)
                       }}
                     />
                   ) : null

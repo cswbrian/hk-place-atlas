@@ -1,32 +1,30 @@
-import { formatFuzzyDate, primaryName } from '../domain/dates'
-import { lineageChain } from '../domain/lineage'
+import { bilingualNames, catalogYear, formatFuzzyDate, primaryName } from '../domain/dates'
 import { linkText } from '../domain/links'
-import { copy, type SiteLocale } from '../domain/locale'
+import { copy, displayNames, type SiteLocale } from '../domain/locale'
 import { formatBuildingSummary, formatLotSummary } from '../domain/lots'
 import { siteCluster } from '../domain/site'
-import type { Establishment, Relation, Source } from '../domain/types'
+import type { Establishment, Source } from '../domain/types'
+import { CatalogRow } from './SitePanel'
 
 type Props = {
   establishment: Establishment
   establishments: Establishment[]
-  relations: Relation[]
   locale: SiteLocale
   onEdit?: () => void
   onSelect: (id: string) => void
   onBack?: () => void
 }
 
-function chainLabel(establishments: Establishment[], ids: string[]) {
-  return ids.map((id) => {
-    const establishment = establishments.find((item) => item.id === id)
-    return establishment ? primaryName(establishment) : id
-  })
+function dateSpan(built: Establishment['built'], demolished: Establishment['demolished']): string {
+  const start = built ? formatFuzzyDate(built) : null
+  const end = demolished ? formatFuzzyDate(demolished) : null
+  if (start && end) return `${start} – ${end}`
+  return start ?? end ?? '—'
 }
 
 export function EstablishmentDetail({
   establishment,
   establishments,
-  relations,
   locale,
   onEdit,
   onSelect,
@@ -34,16 +32,36 @@ export function EstablishmentDetail({
 }: Props) {
   const text = copy[locale]
   const site = siteCluster(establishments, establishment.id)
-  const institution = lineageChain(relations, establishment.id, 'institution_successor')
   const lots = establishment.lots ?? []
   const buildings = establishment.buildings ?? []
 
   return (
     <article className="detail">
+      {onBack ? (
+        <button
+          type="button"
+          className="ghost detail-back"
+          aria-label={text.backToSite}
+          title={text.backToSite}
+          onClick={onBack}
+        >
+          <svg viewBox="4.2 5.2 15.6 13.6" width="20" height="18" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M19 12H5M11 6l-6 6 6 6"
+            />
+          </svg>
+        </button>
+      ) : null}
       <h2>{primaryName(establishment)}</h2>
       <p className="zh place-name">{establishment.names.find((name) => name.lang === 'zh-Hant')?.text}</p>
       <p>
-        {formatFuzzyDate(establishment.built)} – {formatFuzzyDate(establishment.demolished)} · {establishment.status}
+        {dateSpan(establishment.built, establishment.demolished)}
+        {establishment.status !== 'standing' ? ` · ${text[establishment.status]}` : ''}
       </p>
       {establishment.locationLabel && <p>{establishment.locationLabel}</p>}
       {buildings.length > 0 && (
@@ -91,56 +109,35 @@ export function EstablishmentDetail({
         {site.length <= 1 ? (
           <p className="muted">{text.noOtherOnSite}</p>
         ) : (
-          <ol>
+          <ol className="catalog catalog-site">
             {site.map((id) => {
               const item = establishments.find((candidate) => candidate.id === id)
-              const label = item
-                ? `${primaryName(item)} (${formatFuzzyDate(item.built)} – ${formatFuzzyDate(item.demolished)})`
-                : id
+              if (!item) return <CatalogRow key={id} year="—" title={id} />
+              const names = bilingualNames(item)
+              const shown = displayNames({ nameEn: names.en, nameZh: names.zh ?? '' }, locale)
+              const year = catalogYear(item.built ?? item.demolished)
               return (
-                <li key={id}>
-                  {id === establishment.id ? (
-                    <span>{label}</span>
-                  ) : (
-                    <button type="button" className="linkish" onClick={() => onSelect(id)}>
-                      {label}
-                    </button>
-                  )}
-                </li>
+                <CatalogRow
+                  key={id}
+                  year={year.text}
+                  circa={year.circa}
+                  title={shown.title}
+                  zh={shown.secondary}
+                  onTitle={id === establishment.id ? undefined : () => onSelect(id)}
+                />
               )
             })}
           </ol>
         )}
       </section>
-      <section>
-        <h3>{text.institution}</h3>
-        {institution.length <= 1 ? (
-          <p className="muted">{text.noInstitution}</p>
-        ) : (
-          <ol>
-            {chainLabel(establishments, institution).map((label, index) => (
-              <li key={institution[index]}>
-                <button type="button" className="linkish" onClick={() => onSelect(institution[index])}>
-                  {label}
-                </button>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
 
-      <div className="row">
-        {onBack && (
-          <button type="button" className="ghost" onClick={onBack}>
-            {text.backToSite}
-          </button>
-        )}
-        {onEdit ? (
+      {onEdit ? (
+        <div className="row">
           <button type="button" onClick={onEdit}>
             {text.edit}
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </article>
   )
 }

@@ -1,4 +1,5 @@
 import {
+  normalizePhotoTaken,
   photoObjectKeys,
   photoUploadIssues,
   type Photo,
@@ -20,7 +21,11 @@ export type StoredPhoto = {
   lng: number
   lat: number
   source: string
-  remarks: string
+  caption: string
+  photographer: string
+  license: string
+  year: number | null
+  circa: boolean
   sourceUrl: string
   originalKey: string
   mapKey: string
@@ -43,7 +48,11 @@ export type PhotoCreateInput = {
   id: string
   featureId: string
   source: string
-  remarks: string
+  caption: string
+  photographer: string
+  license: string
+  year?: unknown
+  circa?: unknown
   sourceUrl: string
   bytes: ArrayBuffer
   createdAt: string
@@ -57,10 +66,15 @@ export function toPublicPhoto(row: StoredPhoto): Photo {
     lng: row.lng,
     lat: row.lat,
     source: row.source,
-    remarks: row.remarks,
+    caption: row.caption,
+    photographer: row.photographer,
+    license: row.license,
+    year: row.year,
+    circa: row.circa,
     sourceUrl: row.sourceUrl,
     createdAt: row.createdAt,
     createdBy: row.createdBy,
+    tags: [],
   }
 }
 
@@ -72,7 +86,11 @@ export async function createPhoto(
   const issues = photoUploadIssues({
     featureId: input.featureId,
     source: input.source,
-    remarks: input.remarks,
+    caption: input.caption,
+    photographer: input.photographer,
+    license: input.license,
+    year: input.year,
+    circa: input.circa,
     sourceUrl: input.sourceUrl,
     byteLength: input.bytes.byteLength,
     placeFound: place != null,
@@ -80,6 +98,8 @@ export async function createPhoto(
     placeLat: place?.lat,
   })
   if (issues.length > 0) return { ok: false, error: issues[0]! }
+  const taken = normalizePhotoTaken({ year: input.year, circa: input.circa })
+  if ('error' in taken) return { ok: false, error: 'year' }
   const image = await store.inspect(input.bytes)
   if (!image) return { ok: false, error: 'file' }
   if (place?.lng == null || place.lat == null) return { ok: false, error: 'place' }
@@ -101,7 +121,11 @@ export async function createPhoto(
       lng: place.lng,
       lat: place.lat,
       source: input.source.trim(),
-      remarks: input.remarks.trim(),
+      caption: input.caption.trim(),
+      photographer: input.photographer.trim(),
+      license: input.license.trim(),
+      year: taken.year,
+      circa: taken.circa,
       sourceUrl: input.sourceUrl.trim(),
       originalKey: keys.original,
       mapKey: keys.map,

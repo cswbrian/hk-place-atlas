@@ -9,13 +9,11 @@ type Props = {
   site: SiteQueryResult
   establishments: Establishment[]
   onSelectEstablishment: (id: string) => void
-  onClose: () => void
   onEditEstablishment?: (establishment: Establishment) => void
   onAddEstablishment?: () => void
   locale?: SiteLocale
   labels?: {
     title: string
-    close: string
     empty: string
     add: string
   }
@@ -26,18 +24,34 @@ function indexYear(establishment: Establishment | null) {
   return catalogYear(establishment.built ?? establishment.demolished)
 }
 
-export function CatalogYearMark({ text, circa }: { text: string; circa: boolean }) {
+export function CatalogYearMark({
+  text,
+  circa,
+  onActivate,
+}: {
+  text: string
+  circa: boolean
+  onActivate?: () => void
+}) {
+  const className = [
+    'catalog-year',
+    circa ? 'catalog-year-circa' : '',
+    onActivate ? 'catalog-hit' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
   return (
     <span
-      className={circa ? 'catalog-year catalog-year-circa' : 'catalog-year'}
+      className={className}
       aria-label={circa ? `circa ${text}` : undefined}
+      onClick={onActivate}
     >
       {text}
     </span>
   )
 }
 
-function CatalogRow({
+export function CatalogRow({
   year,
   circa = false,
   title,
@@ -58,10 +72,20 @@ function CatalogRow({
 }) {
   return (
     <li className="catalog-row">
-      <CatalogYearMark text={year} circa={circa} />
-      <div className="catalog-name">
+      <CatalogYearMark text={year} circa={circa} onActivate={onTitle} />
+      <div
+        className={onTitle ? 'catalog-name catalog-hit' : 'catalog-name'}
+        onClick={onTitle}
+      >
         {onTitle ? (
-          <button type="button" className="linkish" onClick={onTitle}>
+          <button
+            type="button"
+            className="linkish"
+            onClick={(event) => {
+              event.stopPropagation()
+              onTitle()
+            }}
+          >
             {title}
           </button>
         ) : (
@@ -87,32 +111,26 @@ export function SitePanel({
   onEditEstablishment,
   onSelectEstablishment,
   onAddEstablishment,
-  onClose,
   locale,
   labels,
 }: Props) {
   const title = labels?.title ?? 'This site'
-  const closeLabel = labels?.close ?? 'Close'
   const emptyLabel = labels?.empty ?? 'Nothing recorded here yet. Add a place at this pin.'
   const addLabel = labels?.add ?? 'Add place'
+  const text = copy[locale ?? 'en']
   const siteEstablishments = site.establishmentIds
     .map((id) => establishments.find((establishment) => establishment.id === id))
     .filter((establishment): establishment is Establishment => Boolean(establishment))
     .sort(compareSiteOrder)
   const empty = siteEstablishments.length === 0 && site.buildings.length === 0
-  const editLabel = copy[locale ?? 'en'].edit
+  const editLabel = text.edit
 
   return (
     <article className="detail site-panel">
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h2>{title}</h2>
-        <button type="button" className="linkish" onClick={onClose}>
-          {closeLabel}
-        </button>
-      </div>
-      <p className="muted">
-        {site.lat.toFixed(5)}, {site.lng.toFixed(5)}
-      </p>
+      <h2>{title}</h2>
+      {siteEstablishments.length > 0 ? (
+        <p className="muted">{text.sitePickPlace}</p>
+      ) : null}
 
       {empty && (
         <p className="hint">{emptyLabel}</p>

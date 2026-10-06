@@ -56,7 +56,22 @@ import {
   wikiSlug,
 } from '../src/domain/wiki'
 import { clampLotBbox, wgsToHk80 } from '../src/ui/lots/hk80'
-import { PHOTO_MAX_BYTES } from '../src/domain/photo'
+import {
+  PHOTO_MAX_BYTES,
+  normalizePhotoTaken,
+  photoMetaIssues,
+  type Photo,
+} from '../src/domain/photo'
+import {
+  DELETE_PHOTO_TAGS,
+  DELETE_PLACE_TAGS,
+  PHOTO_TAG_UPSERT,
+  attachPhotoTags,
+  imageMediaType,
+  photoListFilter,
+  photoTagIssues,
+  type PhotoTag,
+} from '../src/domain/photoTag'
 import { createPhoto, removePhoto, type PhotoBucket, type StoredPhoto } from './photos'
 
 type ImageHandle = {
@@ -446,6 +461,7 @@ async function handleDelete(request: Request, env: Env, slug: string): Promise<R
   const match = checkIfMatch(existing.updatedAt, request.headers.get('If-Match'))
   if (match === 'missing') return json({ error: 'If-Match required' }, 428)
   if (match === 'conflict') return json({ error: 'conflict' }, 412)
+  await env.DB.prepare(DELETE_PLACE_TAGS).bind(existing.id).run()
   await env.DB.prepare('DELETE FROM features WHERE id = ?').bind(existing.id).run()
   await audit(env, session, 'delete', existing.id, existing, null)
   return json({ ok: true })
@@ -494,6 +510,7 @@ async function handleAuditRevert(request: Request, env: Env, id: string): Promis
     const match = checkIfMatch(existing.updatedAt, request.headers.get('If-Match'))
     if (match === 'missing') return json({ error: 'If-Match required' }, 428)
     if (match === 'conflict') return json({ error: 'conflict' }, 412)
+    await env.DB.prepare(DELETE_PLACE_TAGS).bind(existing.id).run()
     await env.DB.prepare('DELETE FROM features WHERE id = ?').bind(existing.id).run()
     await audit(env, session, 'revert', existing.id, existing, null)
     return json({ deleted: true })
@@ -679,7 +696,11 @@ type PhotoListRow = {
   lng: number
   lat: number
   source: string
-  remarks: string
+  caption: string
+  photographer: string
+  license: string
+  year: number | null
+  circa: number
   source_url: string
   original_key: string
   map_key: string
@@ -687,6 +708,9 @@ type PhotoListRow = {
   created_at: string
   created_by: string
 }
+
+const PHOTO_SELECT =
+  'id, feature_id, lng, lat, source, caption, photographer, license, year, circa, source_url, original_key, map_key, panel_key, created_at, created_by'
 
 function photoBucket(env: Env): PhotoBucket | null {
   if (!env.PHOTOS || !env.IMAGES) return null
@@ -707,9 +731,9 @@ function photoBucket(env: Env): PhotoBucket | null {
     async insert(row) {
       await env.DB.prepare(
         `INSERT INTO photos (
-          id, feature_id, lng, lat, source, remarks, source_url,
-          original_key, map_key, panel_key, created_at, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, feature_id, lng, lat, source, caption, photographer, license, year, circa,
+          source_url, original_key, map_key, panel_key, created_at, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
         .bind(
           row.id,
@@ -717,7 +741,11 @@ function photoBucket(env: Env): PhotoBucket | null {
           row.lng,
           row.lat,
           row.source,
-          row.remarks,
+          row.caption,
+          row.photographer,
+          row.license,
+          row.year,
+          row.circa ? 1 : 0,
           row.sourceUrl,
           row.originalKey,
           row.mapKey,
@@ -751,17 +779,22 @@ function photoBucket(env: Env): PhotoBucket | null {
   }
 }
 
-function photoFromRow(row: PhotoListRow) {
+function photoFromRow(row: PhotoListRow): Photo {
   return {
     id: row.id,
     featureId: row.feature_id,
     lng: row.lng,
     lat: row.lat,
     source: row.source,
-    remarks: row.remarks,
+    caption: row.caption,
+    photographer: row.photographer,
+    license: row.license,
+    year: row.year,
+    circa: Boolean(row.circa),
     sourceUrl: row.source_url,
     createdAt: row.created_at,
     createdBy: row.created_by,
+    tags: [],
   }
 }
 
@@ -770,21 +803,15 @@ async function handlePhotoList(request: Request, env: Env): Promise<Response> {
   const featureId = url.searchParams.get('featureId')
   const bbox = parseBbox(url.searchParams.get('bbox'))
   if (!featureId && !bbox) return json({ error: 'featureId or bbox is required' }, 400)
-  let sql =
-    'SELECT id, feature_id, lng, lat, source, remarks, source_url, original_key, map_key, panel_key, created_at, created_by FROM photos WHERE 1 = 1'
-  const binds: (string | number)[] = []
-  if (featureId) {
-    sql += ' AND feature_id = ?'
-    binds.push(featureId)
-  }
-  if (bbox) {
-    sql += ' AND lng >= ? AND lng <= ? AND lat >= ? AND lat <= ?'
-    binds.push(bbox.west, bbox.east, bbox.south, bbox.north)
-  }
+  let sql = `SELECT ${PHOTO_SELECT} FROM photos WHERE 1 = 1`
+  const filter = photoListFilter({ featureId, bbox })
+  sql += filter.sql
   sql += ' ORDER BY created_at DESC LIMIT ?'
-  binds.push(PHOTO_LIST_CAP)
+  const binds = [...filter.binds, PHOTO_LIST_CAP]
   const { results } = await env.DB.prepare(sql).bind(...binds).all<PhotoListRow>()
-  return json({ photos: (results ?? []).map(photoFromRow) })
+  const photos = (results ?? []).map(photoFromRow)
+  const tags = await photoTagsFor(env, photos.map((photo) => photo.id))
+  return json({ photos: attachPhotoTags(photos, tags) })
 }
 
 async function handlePhotoCreate(request: Request, env: Env): Promise<Response> {
@@ -807,7 +834,11 @@ async function handlePhotoCreate(request: Request, env: Env): Promise<Response> 
     id: crypto.randomUUID(),
     featureId: String(form.get('featureId') ?? ''),
     source: String(form.get('source') ?? ''),
-    remarks: String(form.get('remarks') ?? ''),
+    caption: String(form.get('caption') ?? ''),
+    photographer: String(form.get('photographer') ?? ''),
+    license: String(form.get('license') ?? ''),
+    year: String(form.get('year') ?? ''),
+    circa: form.get('circa'),
     sourceUrl: String(form.get('sourceUrl') ?? ''),
     bytes: await file.arrayBuffer(),
     createdAt: new Date().toISOString(),
@@ -818,15 +849,77 @@ async function handlePhotoCreate(request: Request, env: Env): Promise<Response> 
   return json(result.photo, 201)
 }
 
+async function handlePhotoUpdate(request: Request, env: Env, id: string): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: 'source' }, 400)
+  }
+  const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
+  const source = typeof record.source === 'string' ? record.source : ''
+  const caption = typeof record.caption === 'string' ? record.caption : ''
+  const photographer = typeof record.photographer === 'string' ? record.photographer : ''
+  const license = typeof record.license === 'string' ? record.license : ''
+  const sourceUrl = typeof record.sourceUrl === 'string' ? record.sourceUrl : ''
+  const issues = photoMetaIssues({
+    source,
+    caption,
+    photographer,
+    license,
+    sourceUrl,
+    year: record.year,
+    circa: record.circa,
+  })
+  if (issues.length > 0) return json({ error: issues[0] }, 400)
+  const taken = normalizePhotoTaken({ year: record.year, circa: record.circa })
+  if ('error' in taken) return json({ error: 'year' }, 400)
+  const row = await env.DB.prepare(`SELECT ${PHOTO_SELECT} FROM photos WHERE id = ?`)
+    .bind(id)
+    .first<PhotoListRow>()
+  if (!row) return json({ error: 'not found' }, 404)
+  if (row.created_by !== session.sub) return json({ error: 'forbidden' }, 403)
+  const before = photoFromRow(row)
+  await env.DB.prepare(
+    `UPDATE photos SET source = ?, caption = ?, photographer = ?, license = ?, year = ?, circa = ?, source_url = ? WHERE id = ?`,
+  )
+    .bind(
+      source.trim(),
+      caption.trim(),
+      photographer.trim(),
+      license.trim(),
+      taken.year,
+      taken.circa ? 1 : 0,
+      sourceUrl.trim(),
+      id,
+    )
+    .run()
+  const updated = photoFromRow({
+    ...row,
+    source: source.trim(),
+    caption: caption.trim(),
+    photographer: photographer.trim(),
+    license: license.trim(),
+    year: taken.year,
+    circa: taken.circa ? 1 : 0,
+    source_url: sourceUrl.trim(),
+  })
+  const tags = await photoTagsFor(env, [id])
+  const [withTags] = attachPhotoTags([updated], tags)
+  await audit(env, session, 'put', id, before, withTags ?? updated, 'photo')
+  return json(withTags ?? updated)
+}
+
 async function handlePhotoDelete(request: Request, env: Env, id: string): Promise<Response> {
   const session = await requireSession(request, env)
   if (session instanceof Response) return session
   if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
   const store = photoBucket(env)
   if (!store) return json({ error: 'photos not configured' }, 503)
-  const row = await env.DB.prepare(
-    'SELECT id, feature_id, lng, lat, source, remarks, source_url, original_key, map_key, panel_key, created_at, created_by FROM photos WHERE id = ?',
-  )
+  const row = await env.DB.prepare(`SELECT ${PHOTO_SELECT} FROM photos WHERE id = ?`)
     .bind(id)
     .first<PhotoListRow>()
   if (!row) return json({ error: 'not found' }, 404)
@@ -836,7 +929,11 @@ async function handlePhotoDelete(request: Request, env: Env, id: string): Promis
     lng: row.lng,
     lat: row.lat,
     source: row.source,
-    remarks: row.remarks,
+    caption: row.caption,
+    photographer: row.photographer,
+    license: row.license,
+    year: row.year,
+    circa: Boolean(row.circa),
     sourceUrl: row.source_url,
     originalKey: row.original_key,
     mapKey: row.map_key,
@@ -846,6 +943,7 @@ async function handlePhotoDelete(request: Request, env: Env, id: string): Promis
   }
   const removed = await removePhoto(store, stored, session.sub)
   if (removed === 'forbidden') return json({ error: 'forbidden' }, 403)
+  await env.DB.prepare(DELETE_PHOTO_TAGS).bind(stored.id).run()
   await audit(env, session, 'delete', stored.id, photoFromRow(row), null, 'photo')
   return json({ ok: true })
 }
@@ -865,6 +963,123 @@ async function handlePhotoThumb(request: Request, env: Env, id: string): Promise
   headers.set('cache-control', 'public, max-age=31536000, immutable')
   if (!headers.get('content-type')) headers.set('content-type', 'image/webp')
   return new Response(object.body, { headers })
+}
+
+type PhotoTagRow = {
+  id: string
+  photo_id: string
+  feature_id: string
+  x: number
+  y: number
+  name_en: string
+  name_zh: string
+  slug: string
+  kind: string
+}
+
+function photoTagFromRow(row: PhotoTagRow): PhotoTag & { photoId: string } {
+  return {
+    photoId: row.photo_id,
+    id: row.id,
+    featureId: row.feature_id,
+    nameEn: row.name_en,
+    nameZh: row.name_zh,
+    slug: row.slug,
+    kind: row.kind,
+    x: row.x,
+    y: row.y,
+  }
+}
+
+async function photoTagsFor(env: Env, photoIds: string[]): Promise<(PhotoTag & { photoId: string })[]> {
+  if (photoIds.length === 0) return []
+  const marks = photoIds.map(() => '?').join(', ')
+  const { results } = await env.DB.prepare(
+    `SELECT t.id, t.photo_id, t.feature_id, t.x, t.y, f.name_en, f.name_zh, f.slug, f.kind
+     FROM photo_tags t
+     JOIN features f ON f.id = t.feature_id
+     WHERE t.photo_id IN (${marks})`,
+  )
+    .bind(...photoIds)
+    .all<PhotoTagRow>()
+  return (results ?? []).map(photoTagFromRow)
+}
+
+async function handlePhotoFile(_request: Request, env: Env, id: string): Promise<Response> {
+  if (!env.PHOTOS) return json({ error: 'photos not configured' }, 503)
+  const row = await env.DB.prepare('SELECT original_key FROM photos WHERE id = ?')
+    .bind(id)
+    .first<{ original_key: string }>()
+  if (!row) return json({ error: 'not found' }, 404)
+  const object = await env.PHOTOS.get(row.original_key)
+  if (!object) return json({ error: 'not found' }, 404)
+  const bytes = new Uint8Array(await object.arrayBuffer())
+  const media = imageMediaType(bytes)
+  if (!media) return json({ error: 'not found' }, 404)
+  return new Response(bytes, {
+    headers: {
+      'content-type': media,
+      'cache-control': 'public, max-age=31536000, immutable',
+    },
+  })
+}
+
+async function handlePhotoTagCreate(request: Request, env: Env, photoId: string): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: 'point' }, 400)
+  }
+  const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
+  const featureId = typeof record.featureId === 'string' ? record.featureId : ''
+  const issues = photoTagIssues({ featureId, x: record.x, y: record.y })
+  if (issues.includes('point')) return json({ error: 'point' }, 400)
+  if (issues.includes('place')) return json({ error: 'place' }, 400)
+  const photo = await env.DB.prepare('SELECT id FROM photos WHERE id = ?').bind(photoId).first<{ id: string }>()
+  if (!photo) return json({ error: 'not found' }, 404)
+  const feature = await env.DB.prepare(
+    'SELECT id, name_en, name_zh, slug, kind FROM features WHERE id = ?',
+  )
+    .bind(featureId.trim())
+    .first<{ id: string; name_en: string; name_zh: string; slug: string; kind: string }>()
+  if (!feature) return json({ error: 'place' }, 404)
+  const now = new Date().toISOString()
+  const x = record.x as number
+  const y = record.y as number
+  await env.DB.prepare(PHOTO_TAG_UPSERT)
+    .bind(crypto.randomUUID(), photoId, feature.id, x, y, now, session.sub)
+    .run()
+  const saved = await env.DB.prepare('SELECT id, x, y FROM photo_tags WHERE photo_id = ? AND feature_id = ?')
+    .bind(photoId, feature.id)
+    .first<{ id: string; x: number; y: number }>()
+  if (!saved) return json({ error: 'not found' }, 404)
+  const tag: PhotoTag = {
+    id: saved.id,
+    featureId: feature.id,
+    nameEn: feature.name_en,
+    nameZh: feature.name_zh,
+    slug: feature.slug,
+    kind: feature.kind,
+    x: saved.x,
+    y: saved.y,
+  }
+  return json(tag)
+}
+
+async function handlePhotoTagDelete(request: Request, env: Env, photoId: string, tagId: string): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  if (await rateLimited(env, session.sub)) return json({ error: 'rate limited' }, 429)
+  const tag = await env.DB.prepare('SELECT id FROM photo_tags WHERE id = ? AND photo_id = ?')
+    .bind(tagId, photoId)
+    .first<{ id: string }>()
+  if (!tag) return json({ error: 'not found' }, 404)
+  await env.DB.prepare('DELETE FROM photo_tags WHERE id = ?').bind(tagId).run()
+  return json({ ok: true })
 }
 
 export default {
@@ -944,8 +1159,14 @@ export default {
     if (route.type === 'feature' && request.method === 'DELETE') return handleDelete(request, env, route.slug)
     if (route.type === 'photos' && request.method === 'GET') return handlePhotoList(request, env)
     if (route.type === 'photos' && request.method === 'POST') return handlePhotoCreate(request, env)
+    if (route.type === 'photo' && request.method === 'PATCH') return handlePhotoUpdate(request, env, route.id)
     if (route.type === 'photo' && request.method === 'DELETE') return handlePhotoDelete(request, env, route.id)
     if (route.type === 'photoThumb' && request.method === 'GET') return handlePhotoThumb(request, env, route.id)
+    if (route.type === 'photoFile' && request.method === 'GET') return handlePhotoFile(request, env, route.id)
+    if (route.type === 'photoTags' && request.method === 'POST') return handlePhotoTagCreate(request, env, route.id)
+    if (route.type === 'photoTag' && request.method === 'DELETE') {
+      return handlePhotoTagDelete(request, env, route.id, route.tagId)
+    }
     if (route.type === 'edges' && request.method === 'GET') {
       const { results } = await env.DB.prepare(
         `SELECT * FROM edges WHERE (from_id = ? AND from_type != 'csdi_building') OR (to_id = ? AND to_type != 'csdi_building')`,

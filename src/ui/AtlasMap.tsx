@@ -19,7 +19,9 @@ import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
 
 setWorkerUrl(workerUrl)
 
-const HK: [number, number] = [114.1694, 22.3193]
+const CITY: [number, number] = [114.1694, 22.3193]
+/** P&O Building (5th Generation). The atlas opens framed on this site. */
+const DEFAULT_CENTER: [number, number] = [114.1575872, 22.28280603]
 const EMPTY: CatalogGeojson = { type: 'FeatureCollection', features: [] }
 const GIS_ZOOM = 17
 
@@ -95,8 +97,8 @@ export function AtlasMap({
     const map = new MapLibreMap({
       container: root.current,
       style: OPENFREEMAP_BRIGHT_STYLE,
-      center: HK,
-      zoom: 11,
+      center: DEFAULT_CENTER,
+      zoom: GIS_ZOOM,
       minZoom: 9,
       maxZoom: 19,
       attributionControl: false,
@@ -264,7 +266,7 @@ export function AtlasMap({
         if (typeof clusterId === 'number' && source instanceof GeoJSONSource) {
           void source.getClusterExpansionZoom(clusterId).then((zoom: number) => {
             map.easeTo({
-              center: cluster.geometry.type === 'Point' ? (cluster.geometry.coordinates as [number, number]) : HK,
+              center: cluster.geometry.type === 'Point' ? (cluster.geometry.coordinates as [number, number]) : CITY,
               zoom,
             })
           })
@@ -353,7 +355,7 @@ export function AtlasMap({
       }
       if (!focus) {
         hadFocus.current = false
-        map.easeTo({ center: HK, zoom: 11 })
+        map.easeTo({ center: CITY, zoom: 11 })
         return
       }
       hadFocus.current = true

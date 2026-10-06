@@ -310,6 +310,25 @@ button:disabled:hover {
   text-decoration: underline;
 }
 
+.detail-back.ghost {
+  display: inline-flex;
+  width: auto;
+  height: 32px;
+  min-height: 0;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.detail-back.ghost:hover {
+  text-decoration: none;
+}
+
+.detail-back svg {
+  display: block;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -440,6 +459,14 @@ button:disabled:hover {
 .catalog-year-circa {
   font-style: italic;
   color: var(--muted);
+}
+
+.catalog-hit {
+  cursor: pointer;
+}
+
+.catalog-row:has(.catalog-hit:hover) .catalog-name .linkish {
+  text-decoration: underline;
 }
 
 .catalog-row > .linkish {
@@ -775,27 +802,284 @@ button.map-photo:hover {
   text-align: center;
 }
 
-.photo-source {
-  color: #fff;
-  font-size: 11px;
-  line-height: 1.3;
-  text-decoration: underline;
-  overflow-wrap: anywhere;
-}
-
-.photo-source:hover {
-  color: #fff;
-}
-
 .photo-card p {
   margin: 0;
   font-size: 11px;
 }
 
+button.photo-thumb,
+button.photo-thumb:hover {
+  width: 96px;
+  height: 96px;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  background: transparent;
+  line-height: 0;
+  cursor: pointer;
+}
+
+button.photo-delete,
+button.photo-delete:hover {
+  align-self: flex-start;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+
+button.photo-delete:hover {
+  opacity: 0.65;
+}
+
+.lightbox,
+.lightbox-form {
+  position: fixed;
+  inset: 0;
+  z-index: 4100;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.92);
+  color: #fff;
+}
+
+.lightbox-form {
+  z-index: 4200;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.lightbox-form .panel-form {
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 16px;
+  background: var(--background);
+}
+
+.lightbox-bar,
+.lightbox-caption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+
+.lightbox-bar .lightbox-icon {
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+}
+
+.lightbox-bar .lightbox-tag-toggle {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 4px 8px;
+  min-height: 0;
+  opacity: 0.85;
+}
+
+.lightbox-bar .lightbox-tag-toggle.is-on {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.lightbox-caption {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.lightbox-caption a {
+  color: #fff;
+}
+
+.lightbox-hint {
+  margin: 0;
+  color: #d4d4d4;
+  font-size: 13px;
+}
+
+.lightbox-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(280px, 34vw);
+}
+
+.lightbox-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lightbox-aside {
+  overflow: auto;
+  padding: 12px 16px;
+  border-left: 1px solid #333;
+  background: #0a0a0a;
+}
+
+.lightbox-aside-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.lightbox-aside h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.lightbox-aside .linkish {
+  font-size: 12px;
+  color: #d4d4d4;
+}
+
+.lightbox-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lightbox-meta label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #d4d4d4;
+}
+
+.lightbox-meta input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+.lightbox-meta textarea {
+  padding: 6px 8px;
+  border: 1px solid #525252;
+  border-bottom: 1px solid #525252;
+  background: #111;
+  color: #fff;
+}
+
+.lightbox-meta a,
+.lightbox-meta label > span {
+  color: #fff;
+}
+
+.lightbox-meta .primary {
+  align-self: flex-start;
+}
+
+.lightbox-stage {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px 16px;
+  overflow: hidden;
+  container-type: size;
+}
+
+.lightbox-photo {
+  position: relative;
+  width: fit-content;
+  height: fit-content;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.lightbox-photo img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100cqw;
+  max-height: 100cqh;
+  object-fit: contain;
+}
+
+.photo-pin,
+.pin-search {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+}
+
+.photo-pin-name,
+.photo-pin-remove,
+.pin-search button {
+  min-height: 0;
+  padding: 4px 8px;
+  border: 0;
+  background: #fff;
+  color: #111;
+  font: inherit;
+}
+
+.pin-search {
+  flex-direction: column;
+  width: min(220px, 70vw);
+  padding: 8px;
+  gap: 4px;
+}
+
+.pin-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']) {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #111;
+  border-bottom: 1px solid #111;
+  background: #fff;
+  color: #111;
+}
+
+.pin-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file'])::placeholder {
+  color: #525252;
+}
+
+.pin-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):focus {
+  border-bottom-width: 1px;
+  outline: 2px solid #111;
+  outline-offset: 1px;
+}
+
+.pin-search-hint,
+.pin-search-secondary {
+  margin: 0;
+  color: #525252;
+  font-size: 12px;
+}
+
+.pin-search a {
+  color: #111;
+  padding: 4px 8px;
+}
+
 @media (max-width: 800px) {
   .workspace { grid-template-columns: 1fr; }
   .sidebar { border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
-  button:not(.linkish):not(.ghost):not(.chip),
+  .lightbox-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .lightbox-aside {
+    border-left: 0;
+    border-top: 1px solid #333;
+    max-height: 40vh;
+  }
+  button:not(.linkish):not(.ghost):not(.chip):not(.photo-thumb):not(.photo-delete):not(.photo-pin-name):not(.photo-pin-remove):not(.lightbox-icon),
   .upload {
     min-height: 44px;
   }

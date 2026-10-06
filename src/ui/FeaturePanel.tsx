@@ -15,7 +15,6 @@ type Props = {
   edges: FeatureEdge[]
   recent?: RecentItem[]
   onSelectSlug: (slug: string, kind?: FeatureKind) => void
-  onClose: () => void
   onBack?: () => void
   onAdd?: () => void
   onEdit?: () => void
@@ -33,7 +32,6 @@ export function FeaturePanel({
   edges,
   recent = [],
   onSelectSlug,
-  onClose,
   onBack,
   onAdd,
   onEdit,
@@ -55,7 +53,6 @@ export function FeaturePanel({
         <EstablishmentDetail
           establishment={featureAsEstablishment(selected)}
           establishments={establishments}
-          relations={[]}
           locale={locale}
           onSelect={selectId}
           onBack={onBack}
@@ -118,20 +115,21 @@ export function FeaturePanel({
 
   if (site) {
     return (
-      <SitePanel
-        site={site}
-        establishments={establishments}
-        onSelectEstablishment={selectId}
-        onClose={onClose}
-        onAddEstablishment={onAdd}
-        locale={locale}
-        labels={{
-          title: text.thisSite,
-          close: text.close,
-          empty: text.emptySite,
-          add: text.add,
-        }}
-      />
+      <>
+        <SitePanel
+          site={site}
+          establishments={establishments}
+          onSelectEstablishment={selectId}
+          onAddEstablishment={onAdd}
+          locale={locale}
+          labels={{
+            title: text.thisSite,
+            empty: text.emptySite,
+            add: text.add,
+          }}
+        />
+        {photos}
+      </>
     )
   }
 

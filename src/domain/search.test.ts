@@ -12,6 +12,11 @@ describe('fts5Query', () => {
     expect(fts5Query('高街')).toBeNull()
     expect(fts5Query('高街 HIGH')).toBe('HIGH*')
   })
+
+  it('keeps single letters from names like P&O as a phrase with longer terms', () => {
+    expect(fts5Query('P&O Buildin')).toBe('"P O" AND Buildin*')
+    expect(fts5Query('P&O')).toBe('"P O"')
+  })
 })
 
 describe('hanNeedle', () => {

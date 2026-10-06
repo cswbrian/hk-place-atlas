@@ -1,12 +1,22 @@
+import type { PhotoTag } from './photoTag'
+import { formatFuzzyDate } from './dates'
+
 export const PHOTO_MAX_BYTES = 20 * 1024 * 1024
 export const PHOTO_MAP_ZOOM = 17
+export const PHOTO_YEAR_MIN = 1000
+export const PHOTO_YEAR_MAX = 2100
 
-export type PhotoUploadIssue = 'place' | 'source' | 'sourceUrl' | 'file'
+export type PhotoUploadIssue = 'place' | 'file' | 'year'
+export type PhotoMetaIssue = 'source' | 'sourceUrl' | 'year'
 
 export type PhotoUploadCheck = {
   featureId?: string | null
   source?: string | null
-  remarks?: string | null
+  caption?: string | null
+  photographer?: string | null
+  license?: string | null
+  year?: unknown
+  circa?: unknown
   sourceUrl?: string | null
   byteLength?: number | null
   placeFound?: boolean
@@ -20,10 +30,15 @@ export type Photo = {
   lng: number
   lat: number
   source: string
-  remarks: string
+  caption: string
+  photographer: string
+  license: string
+  year: number | null
+  circa: boolean
   sourceUrl: string
   createdAt: string
   createdBy: string
+  tags: PhotoTag[]
 }
 
 export type PhotoPin = {
@@ -41,6 +56,44 @@ export type MapThumb = {
   count: number
 }
 
+export function normalizePhotoTaken(input: {
+  year?: unknown
+  circa?: unknown
+}): { year: number | null; circa: boolean } | { error: 'year' } {
+  const raw = input.year
+  if (raw == null || raw === '') {
+    return { year: null, circa: false }
+  }
+  const text = typeof raw === 'string' ? raw.trim() : raw
+  if (text === '') return { year: null, circa: false }
+  const n = typeof text === 'number' ? text : Number(text)
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < PHOTO_YEAR_MIN || n > PHOTO_YEAR_MAX) {
+    return { error: 'year' }
+  }
+  return { year: n, circa: truthyFlag(input.circa) }
+}
+
+export function formatPhotoTaken(year: number | null, circa: boolean): string | null {
+  if (year == null) return null
+  return formatFuzzyDate({ year, circa })
+}
+
+export function photoDetailText(value: string | null | undefined): string {
+  const text = value?.trim() ?? ''
+  return text || '-'
+}
+
+export function photoDetailUrlHost(value: string | null | undefined): string {
+  const text = value?.trim() ?? ''
+  if (!text) return '-'
+  try {
+    const host = new URL(text).hostname
+    return host || '-'
+  } catch {
+    return '-'
+  }
+}
+
 export function photoUploadIssues(input: PhotoUploadCheck): PhotoUploadIssue[] {
   const issues: PhotoUploadIssue[] = []
   const featureId = input.featureId?.trim() ?? ''
@@ -52,11 +105,18 @@ export function photoUploadIssues(input: PhotoUploadCheck): PhotoUploadIssue[] {
     Number.isFinite(input.placeLng) &&
     Number.isFinite(input.placeLat)
   if (!located) issues.push('place')
-  if (!(input.source?.trim())) issues.push('source')
-  if (!httpsUrl(input.sourceUrl)) issues.push('sourceUrl')
+  const taken = normalizePhotoTaken({ year: input.year, circa: input.circa })
+  if ('error' in taken) issues.push('year')
   const size = input.byteLength ?? 0
   if (!Number.isFinite(size) || size <= 0 || size > PHOTO_MAX_BYTES) issues.push('file')
   return issues
+}
+
+export function photoMetaComplete(input: {
+  source?: string | null
+  sourceUrl?: string | null
+}): boolean {
+  return photoMetaIssues({ source: input.source, sourceUrl: input.sourceUrl }).length === 0
 }
 
 export function photoObjectKeys(id: string): { original: string; map: string; panel: string } {
@@ -69,6 +129,19 @@ export function photoObjectKeys(id: string): { original: string; map: string; pa
 
 export function thumbPath(id: string, size: 'map' | 'panel'): string {
   return `/api/photos/${encodeURIComponent(id)}/thumb?size=${size}`
+}
+
+export function mergeSitePhotos(lists: Photo[][]): Photo[] {
+  const seen = new Set<string>()
+  const merged: Photo[] = []
+  for (const list of lists) {
+    for (const photo of list) {
+      if (seen.has(photo.id)) continue
+      seen.add(photo.id)
+      merged.push(photo)
+    }
+  }
+  return merged
 }
 
 export function mapThumbs(photos: PhotoPin[], zoom: number): MapThumb[] {
@@ -92,6 +165,27 @@ export function mapThumbs(photos: PhotoPin[], zoom: number): MapThumb[] {
     })
   }
   return thumbs
+}
+
+export function photoMetaIssues(input: {
+  source?: string | null
+  caption?: string | null
+  photographer?: string | null
+  license?: string | null
+  sourceUrl?: string | null
+  year?: unknown
+  circa?: unknown
+}): PhotoMetaIssue[] {
+  const issues: PhotoMetaIssue[] = []
+  if (!(input.source?.trim())) issues.push('source')
+  if (!httpsUrl(input.sourceUrl)) issues.push('sourceUrl')
+  const taken = normalizePhotoTaken({ year: input.year, circa: input.circa })
+  if ('error' in taken) issues.push('year')
+  return issues
+}
+
+function truthyFlag(value: unknown): boolean {
+  return value === true || value === 1 || value === '1' || value === 'true'
 }
 
 function httpsUrl(value: string | null | undefined): boolean {

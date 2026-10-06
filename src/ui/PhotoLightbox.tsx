@@ -7,6 +7,8 @@ import { copy, displayNames, type SiteLocale } from '../domain/locale'
 import {
   formatPhotoTaken,
   normalizePhotoTaken,
+  photoDetailText,
+  photoDetailUrlHost,
   photoMetaComplete,
   photoMetaIssues,
   type Photo,
@@ -118,7 +120,9 @@ export function PhotoLightbox({
   const [editingMeta, setEditingMeta] = useState(false)
 
   const needsLocate = Boolean(
-    photo && !(photo.tags ?? []).some((tag) => tag.featureId === placeFeatureId),
+    placeFeatureId &&
+      photo &&
+      !(photo.tags ?? []).some((tag) => tag.featureId === placeFeatureId),
   )
   const canEditMeta = Boolean(userSub && photo && userSub === photo.createdBy)
 
@@ -322,19 +326,46 @@ export function PhotoLightbox({
       <div className="lightbox-bar">
         {allowsPaging ? (
           <>
-            <button type="button" className="ghost" disabled={index === 0} onClick={() => onIndex(index - 1)}>
-              {text.photoPrev}
+            <button
+              type="button"
+              className="lightbox-icon"
+              disabled={index === 0}
+              aria-label={text.photoPrev}
+              title={text.photoPrev}
+              onClick={() => onIndex(index - 1)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 6l-6 6 6 6"
+                />
+              </svg>
             </button>
             <span>
               {index + 1} / {photos.length}
             </span>
             <button
               type="button"
-              className="ghost"
+              className="lightbox-icon"
               disabled={index >= photos.length - 1}
+              aria-label={text.photoNext}
+              title={text.photoNext}
               onClick={() => onIndex(index + 1)}
             >
-              {text.photoNext}
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 6l6 6-6 6"
+                />
+              </svg>
             </button>
           </>
         ) : null}
@@ -360,8 +391,23 @@ export function PhotoLightbox({
             {text.photoDone}
           </button>
         ) : null}
-        <button type="button" className="ghost" onClick={() => void requestClose()}>
-          {text.photoClose}
+        <button
+          type="button"
+          className="lightbox-icon"
+          aria-label={text.photoClose}
+          title={text.photoClose}
+          onClick={() => void requestClose()}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6 6l12 12M18 6L6 18"
+            />
+          </svg>
         </button>
       </div>
       <div className="lightbox-body">
@@ -578,19 +624,42 @@ export function PhotoLightbox({
             </form>
           ) : (
             <div className="lightbox-meta">
-              {photoMetaComplete(photo) ? (
-                <p>
+              <label>
+                {text.photoSource}
+                {photoMetaComplete(photo) ? (
                   <a href={photo.sourceUrl} target="_blank" rel="noreferrer">
-                    {photo.source}
+                    {photoDetailText(photo.source)}
                   </a>
-                </p>
-              ) : (
-                <p className="muted">{text.photoIncomplete}</p>
-              )}
-              {takenLabel ? <p>{takenLabel}</p> : null}
-              {photo.caption ? <p>{photo.caption}</p> : null}
-              {photo.photographer ? <p>{photo.photographer}</p> : null}
-              {photo.license ? <p className="muted">{photo.license}</p> : null}
+                ) : (
+                  <span>{photoDetailText(photo.source)}</span>
+                )}
+              </label>
+              <label>
+                {text.photoCaption}
+                <span>{photoDetailText(photo.caption)}</span>
+              </label>
+              <label>
+                {text.photoTakenYear}
+                <span>{photoDetailText(takenLabel)}</span>
+              </label>
+              <label>
+                {text.photoPhotographer}
+                <span>{photoDetailText(photo.photographer)}</span>
+              </label>
+              <label>
+                {text.photoLicense}
+                <span>{photoDetailText(photo.license)}</span>
+              </label>
+              <label>
+                {text.photoSourceUrl}
+                {photo.sourceUrl.trim() ? (
+                  <a href={photo.sourceUrl} target="_blank" rel="noreferrer">
+                    {photoDetailUrlHost(photo.sourceUrl)}
+                  </a>
+                ) : (
+                  <span>-</span>
+                )}
+              </label>
               {metaSaved ? <p className="lightbox-hint">{text.photoSaved}</p> : null}
             </div>
           )}

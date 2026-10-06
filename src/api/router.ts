@@ -17,6 +17,9 @@ export type ApiRoute =
   | { type: 'photos' }
   | { type: 'photo'; id: string }
   | { type: 'photoThumb'; id: string }
+  | { type: 'photoFile'; id: string }
+  | { type: 'photoTags'; id: string }
+  | { type: 'photoTag'; id: string; tagId: string }
 
 export function parseApiRoute(url: URL): ApiRoute | null {
   const path = url.pathname.replace(/\/$/, '') || '/'
@@ -45,6 +48,18 @@ export function parseApiRoute(url: URL): ApiRoute | null {
   if (path === '/api/photos') return { type: 'photos' }
   const photoThumb = /^\/api\/photos\/([^/]+)\/thumb$/.exec(path)
   if (photoThumb) return { type: 'photoThumb', id: decodeURIComponent(photoThumb[1]!) }
+  const photoFile = /^\/api\/photos\/([^/]+)\/file$/.exec(path)
+  if (photoFile) return { type: 'photoFile', id: decodeURIComponent(photoFile[1]!) }
+  const photoTag = /^\/api\/photos\/([^/]+)\/tags\/([^/]+)$/.exec(path)
+  if (photoTag) {
+    return {
+      type: 'photoTag',
+      id: decodeURIComponent(photoTag[1]!),
+      tagId: decodeURIComponent(photoTag[2]!),
+    }
+  }
+  const photoTags = /^\/api\/photos\/([^/]+)\/tags$/.exec(path)
+  if (photoTags) return { type: 'photoTags', id: decodeURIComponent(photoTags[1]!) }
   const photo = /^\/api\/photos\/([^/]+)$/.exec(path)
   if (photo) return { type: 'photo', id: decodeURIComponent(photo[1]!) }
   if (path === '/api/gis/buildings') return { type: 'gisBuildings' }

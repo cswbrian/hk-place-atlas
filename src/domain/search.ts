@@ -9,9 +9,28 @@ export function fts5Query(raw: string): string | null {
     .replace(/["*^:(){}]/g, ' ')
     .split(/[^a-zA-Z0-9]+/)
     .map((term) => term.trim())
-    .filter((term) => term.length >= 2)
-  if (!latin.length) return null
-  return latin.map((term) => `${term}*`).join(' AND ')
+    .filter((term) => term.length > 0)
+  // Drop a lone one-letter query (too broad). Keep short letters when they sit
+  // beside other terms so names like P&O still match.
+  const terms = latin.filter((term) => term.length >= 2 || latin.length > 1)
+  if (!terms.length) return null
+  const parts: string[] = []
+  for (let i = 0; i < terms.length; ) {
+    if (terms[i]!.length === 1) {
+      const letters = [terms[i]!]
+      let j = i + 1
+      while (j < terms.length && terms[j]!.length === 1) {
+        letters.push(terms[j]!)
+        j += 1
+      }
+      parts.push(letters.length === 1 ? `"${letters[0]}"` : `"${letters.join(' ')}"`)
+      i = j
+      continue
+    }
+    parts.push(`${terms[i]}*`)
+    i += 1
+  }
+  return parts.join(' AND ')
 }
 
 export function hanNeedle(raw: string): string | null {
