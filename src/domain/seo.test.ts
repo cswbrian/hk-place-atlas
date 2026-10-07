@@ -195,6 +195,14 @@ describe('featureSeoHead', () => {
     expect(zh.title).toBe('金高大廈 · 香港地圖集')
     expect(zh.siteName).toBe('香港地圖集')
   })
+
+  it('falls back to a Hong Kong place description when notes are empty', () => {
+    const empty = { ...stub, body: { ...stub.body, notes: '' } }
+    const en = featureSeoHead(empty, 'https://hkatlas.fyi', 'en')
+    expect(en.description).toBe('HIGH HOUSE — historical place in Hong Kong on HK Atlas')
+    const zh = featureSeoHead(empty, 'https://hkatlas.fyi', 'zh-hk')
+    expect(zh.description).toBe('金高大廈 — 香港地圖集上的香港歷史地方')
+  })
 })
 
 describe('browserOrigin', () => {

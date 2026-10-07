@@ -238,8 +238,13 @@ export function crawlerBodyHtml(
 
 export function featureSeoHead(feature: Feature, origin: string, locale: SiteLocale): SeoHead {
   const rest = featurePublicPath(locale, feature.kind, feature.slug).replace(/^\/(en|zh-hk)/, '') || '/'
-  const title = `${featureName(feature, locale)} · ${copy[locale].title}`
-  const description = feature.body.notes.trim() || copy[locale].tagline
+  const name = featureName(feature, locale)
+  const title = `${name} · ${copy[locale].title}`
+  const fallback =
+    locale === 'zh-hk'
+      ? `${name} — 香港地圖集上的香港歷史地方`
+      : `${name} — historical place in Hong Kong on HK Atlas`
+  const description = feature.body.notes.trim() || fallback
   return {
     lang: htmlLang(locale),
     title,
