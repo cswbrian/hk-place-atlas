@@ -21,7 +21,12 @@ export type SeoHead = {
   ogLocale: string
   ogLocaleAlternate: string
   siteName: string
+  ogImage: string
   crawlerBody: string
+}
+
+function ogImageUrl(origin: string): string {
+  return `${origin.replace(/\/+$/, '')}/og.png`
 }
 
 export type SitemapFeature = { kind: FeatureKind; slug: string }
@@ -257,6 +262,7 @@ export function featureSeoHead(feature: Feature, origin: string, locale: SiteLoc
     ogLocale: OG_LOCALE[locale],
     ogLocaleAlternate: ogLocaleAlternate(locale),
     siteName: siteName(locale),
+    ogImage: ogImageUrl(origin),
     crawlerBody: crawlerBodyHtml({ type: 'feature', feature, locale }),
   }
 }
@@ -274,6 +280,7 @@ export function homeSeoHead(origin: string, locale: SiteLocale): SeoHead {
     ogLocale: OG_LOCALE[locale],
     ogLocaleAlternate: ogLocaleAlternate(locale),
     siteName: siteName(locale),
+    ogImage: ogImageUrl(origin),
     crawlerBody: crawlerBodyHtml({ type: 'home', locale }),
   }
 }
@@ -292,6 +299,7 @@ export function aboutSeoHead(origin: string, locale: SiteLocale): SeoHead {
     ogLocale: OG_LOCALE[locale],
     ogLocaleAlternate: ogLocaleAlternate(locale),
     siteName: siteName(locale),
+    ogImage: ogImageUrl(origin),
     crawlerBody: crawlerBodyHtml({ type: 'about', locale }),
   }
 }
@@ -309,6 +317,7 @@ export function notFoundSeoHead(origin: string, locale: SiteLocale): SeoHead {
     ogLocale: OG_LOCALE[locale],
     ogLocaleAlternate: ogLocaleAlternate(locale),
     siteName: siteName(locale),
+    ogImage: ogImageUrl(origin),
     crawlerBody: crawlerBodyHtml({ type: 'notFound', locale }),
   }
 }
@@ -340,7 +349,9 @@ export function injectSeoHead(html: string, head: SeoHead, measurementId?: strin
     `<meta property="og:locale" content="${escapeHtml(head.ogLocale)}" />`,
     `<meta property="og:locale:alternate" content="${escapeHtml(head.ogLocaleAlternate)}" />`,
     `<meta property="og:site_name" content="${escapeHtml(head.siteName)}" />`,
-    `<meta name="twitter:card" content="summary" />`,
+    `<meta property="og:image" content="${escapeHtml(head.ogImage)}" />`,
+    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:image" content="${escapeHtml(head.ogImage)}" />`,
     `<script type="application/ld+json">${safeJsonLd(head.jsonLd)}</script>`,
     gtagSnippet(measurementId),
   ].join('')
