@@ -7,14 +7,23 @@ import {
   NavigationControl,
   setWorkerUrl,
   type MapMouseEvent,
+  type StyleSpecification,
 } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import type { CatalogGeojson } from '../domain/catalog'
 import type { Bbox } from '../domain/featureQuery'
+import type { SiteLocale } from '../domain/locale'
 import { mapThumbs, thumbPath, type PhotoPin } from '../domain/photo'
 import type { BuildingSnapshot, LotSnapshot } from '../domain/types'
-import { LANDSD_ATTRIBUTION, LANDSD_STYLE_URL, landsDepartmentMapStyle } from './basemap'
+import {
+  LANDSD_ATTRIBUTION,
+  LANDSD_STYLE_URL,
+  landsDepartmentMapStyle,
+  landsdLabelLang,
+  landsdLabelStyleUrl,
+  mergeLandsDepartmentLabels,
+} from './basemap'
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
 
 setWorkerUrl(workerUrl)
@@ -26,6 +35,7 @@ const EMPTY: CatalogGeojson = { type: 'FeatureCollection', features: [] }
 const GIS_ZOOM = 17
 
 type Props = {
+  locale: SiteLocale
   catalog: CatalogGeojson
   selectedId: string | null
   focus: Bbox | null
@@ -62,6 +72,7 @@ function bboxOf(map: MapLibreMap): Bbox {
 }
 
 export function AtlasMap({
+  locale,
   catalog,
   selectedId,
   focus,
@@ -83,6 +94,7 @@ export function AtlasMap({
   const onPhoto = useRef(onPhotoClick)
   const onViewRef = useRef(onView)
   const paintPhotosRef = useRef<() => void>(() => {})
+  const applyBasemapRef = useRef<(siteLocale: SiteLocale) => Promise<void>>(async () => {})
   catalogRef.current = catalog
   selectedRef.current = selectedId
   buildingsRef.current = buildings
@@ -103,10 +115,26 @@ export function AtlasMap({
       maxZoom: 19,
       attributionControl: false,
     })
-    map.setStyle(LANDSD_STYLE_URL, {
-      diff: false,
-      transformStyle: (_previous, next) => landsDepartmentMapStyle(next),
-    })
+    const applyBasemap = async (siteLocale: SiteLocale) => {
+      const labelUrl = landsdLabelStyleUrl(landsdLabelLang(siteLocale))
+      let labels: StyleSpecification | null = null
+      try {
+        const response = await fetch(labelUrl)
+        if (response.ok) labels = (await response.json()) as StyleSpecification
+      } catch {
+        labels = null
+      }
+      if (!mapRef.current) return
+      mapRef.current.setStyle(LANDSD_STYLE_URL, {
+        diff: false,
+        transformStyle: (_previous, next) => {
+          const basemap = landsDepartmentMapStyle(next)
+          if (!labels) return basemap
+          return mergeLandsDepartmentLabels(basemap, landsDepartmentMapStyle(labels, labelUrl))
+        },
+      })
+    }
+    applyBasemapRef.current = applyBasemap
     map.addControl(
       new AttributionControl({ compact: true, customAttribution: `${LANDSD_ATTRIBUTION} · CSDI` }),
     )
@@ -317,6 +345,11 @@ export function AtlasMap({
       mapRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!mapRef.current) return
+    void applyBasemapRef.current(locale)
+  }, [locale])
 
   useEffect(() => {
     const map = mapRef.current

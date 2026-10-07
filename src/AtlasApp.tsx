@@ -563,6 +563,7 @@ function AtlasApp() {
           <div className="workspace">
             <div className="map-stack">
               <AtlasMap
+                locale={locale}
                 catalog={visible}
                 selectedId={selected?.id ?? hitId}
                 focus={mapFocus}
