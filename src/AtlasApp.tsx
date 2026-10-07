@@ -37,6 +37,7 @@ import { querySite, type SiteQueryResult } from './domain/querySite'
 import { trackPageview } from './domain/analytics'
 import { districtBbox } from './domain/districtView'
 import { shouldLoadRecent, type RecentItem } from './domain/recent'
+import { AboutPage } from './ui/AboutPage'
 import { AtlasMap } from './ui/AtlasMap'
 import { MapRegionChips } from './ui/MapRegionChips'
 import { FeatureForm, emptyWikiDraft, wikiDraftFromFeature, wikiDraftToWrite, type WikiDraft } from './ui/FeatureForm'
@@ -441,6 +442,17 @@ function AtlasApp() {
         </div>
         <nav className="lang-switch" aria-label="Language">
           <a
+            href={`/${locale}/about`}
+            className="chrome-about"
+            aria-current={rest === '/about' ? 'page' : undefined}
+            onClick={(event) => {
+              event.preventDefault()
+              go(`/${locale}/about`)
+            }}
+          >
+            {text.aboutNav}
+          </a>
+          <a
             href={`${switchLocalePath(path, otherLocale)}${search}`}
             hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
             lang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
@@ -464,197 +476,37 @@ function AtlasApp() {
           ) : null}
         </nav>
       </header>
-      <div className="workspace">
-          <div className="map-stack">
-            <AtlasMap
-              catalog={visible}
-              selectedId={selected?.id ?? hitId}
-              focus={mapFocus}
-              buildings={site?.buildings ?? []}
-              lots={site?.lots ?? []}
-              photos={mapPhotos}
-              onPointClick={openPoint}
-              onPhotoClick={openPhoto}
-              onView={loadMapPhotos}
-            />
-            <MapRegionChips
-              locale={locale}
-              region={mapRegion}
-              district={mapDistrict}
-              onRegion={(slug) => {
-                setMapRegion(slug)
-                setMapDistrict(null)
-              }}
-              onDistrict={setMapDistrict}
-            />
-          </div>
-          <aside className="sidebar" id="site-panel">
-            {error ? <p className="error">{error}</p> : null}
-            {draft && !pinForm ? (
-              <FeatureForm
-                locale={locale}
-                draft={draft}
-                creating={creating}
-                error={formError}
-                onChange={setDraft}
-                onCancel={() => {
-                  pinCommit.current = null
-                  setPinForm(false)
-                  setDraft(null)
-                  setCreating(false)
-                  setFormError(null)
-                }}
-                onSave={() => {
-                  if (draft.lng == null || draft.lat == null) {
-                    setFormError(text.clickMap)
-                    return
-                  }
-                  setFormError(null)
-                  void saveFeature(
-                    wikiDraftToWrite(draft),
-                    creating ? undefined : selected?.slug,
-                    creating ? undefined : selected?.updatedAt,
-                  )
-                    .then(async (saved) => {
-                      setOverlay((current) => [
-                        ...current.filter((item) => item.id !== saved.id),
-                        saved,
-                      ])
-                      const commit = pinCommit.current
-                      pinCommit.current = null
-                      setPinForm(false)
-                      setDraft(null)
-                      setCreating(false)
-                      if (commit) {
-                        await commit(saved.id)
-                        return
-                      }
-                      setSelected(saved)
-                      go(featurePublicPath(locale, saved.kind, saved.slug))
-                      closeHistory()
-                    })
-                    .catch((err: Error) => setFormError(err.message))
-                }}
-                onDelete={
-                  !creating && selected && wikiCanDelete(selected.id)
-                    ? () => {
-                        if (!window.confirm(text.deletePlaceConfirm)) return
-                        void deleteFeature(selected.slug, selected.updatedAt)
-                          .then(() => {
-                            setOverlay((current) => current.filter((item) => item.id !== selected.id))
-                            setDraft(null)
-                            setCreating(false)
-                            closePanel()
-                          })
-                          .catch((err: Error) => setFormError(err.message))
-                      }
-                    : undefined
-                }
+      {rest === '/about' ? (
+        <AboutPage locale={locale} onBack={() => go(`/${locale}`)} />
+      ) : (
+        <>
+          <div className="workspace">
+            <div className="map-stack">
+              <AtlasMap
+                catalog={visible}
+                selectedId={selected?.id ?? hitId}
+                focus={mapFocus}
+                buildings={site?.buildings ?? []}
+                lots={site?.lots ?? []}
+                photos={mapPhotos}
+                onPointClick={openPoint}
+                onPhotoClick={openPhoto}
+                onView={loadMapPhotos}
               />
-            ) : (
-              <FeaturePanel
+              <MapRegionChips
                 locale={locale}
-                site={site}
-                features={panelFeatures}
-                selected={selected}
-                edges={edges}
-                recent={recent}
-                onSelectSlug={selectSlug}
-                onBack={
-                  site
-                    ? () => {
-                        setSelected(null)
-                        go(canonicalPath(locale, '/'))
-                      }
-                    : undefined
-                }
-                onAdd={auth ? () => requireUser('add', startAdd) : undefined}
-                onEdit={
-                  auth && selected ? () => requireUser('edit', () => startEdit(selected)) : undefined
-                }
-                audit={user ? audit : null}
-                onShowHistory={
-                  user && selected ? () => loadHistory(selected.id) : undefined
-                }
-                photos={
-                  selected ? (
-                    <PlacePhotos
-                      featureId={selected.id}
-                      placeName={displayNames(selected, locale).title}
-                      canUpload={selected.lng != null && selected.lat != null}
-                      userSub={user?.sub ?? null}
-                      locale={locale}
-                      signInHref={signInHrefFor('photo')}
-                      onNeedSignIn={() => setSignInIntent('photo')}
-                      requestPick={photoRequestPick}
-                      onRequestPickConsumed={() => setPhotoRequestPick(false)}
-                      onOpenPlace={selectSlug}
-                      onCreatePlace={(request) => {
-                        pinCommit.current = request.commit
-                        setFormError(null)
-                        setCreating(true)
-                        setPinForm(true)
-                        setDraft({ ...emptyWikiDraft(request.lng, request.lat), nameEn: request.nameEn })
-                      }}
-                      onChange={() => {
-                        const view = mapView.current
-                        if (view) loadMapPhotos(view.bbox, view.zoom)
-                        if (historyOpen.current) loadHistory(selected.id)
-                      }}
-                    />
-                  ) : site ? (
-                    <PlacePhotos
-                      featureIds={site.establishmentIds}
-                      placeName={text.thisSite}
-                      canUpload={false}
-                      userSub={user?.sub ?? null}
-                      locale={locale}
-                      signInHref={signInHrefFor('photo')}
-                      onOpenPlace={selectSlug}
-                      onCreatePlace={(request) => {
-                        pinCommit.current = request.commit
-                        setFormError(null)
-                        setCreating(true)
-                        setPinForm(true)
-                        setDraft({ ...emptyWikiDraft(request.lng, request.lat), nameEn: request.nameEn })
-                      }}
-                      onChange={() => {
-                        const view = mapView.current
-                        if (view) loadMapPhotos(view.bbox, view.zoom)
-                      }}
-                    />
-                  ) : null
-                }
-                onRevert={
-                  user && selected
-                    ? (id) => {
-                        void revertAudit(id, selected.updatedAt)
-                          .then((result) => {
-                            if ('deleted' in result && result.deleted) {
-                              setOverlay((current) => current.filter((item) => item.id !== selected.id))
-                              closePanel()
-                              return
-                            }
-                            if (!('id' in result)) return
-                            setOverlay((current) => [
-                              ...current.filter((item) => item.id !== result.id),
-                              result,
-                            ])
-                            setSelected(result)
-                            go(featurePublicPath(locale, result.kind, result.slug))
-                            loadHistory(result.id)
-                          })
-                          .catch((err: Error) => setError(err.message))
-                      }
-                    : undefined
-                }
+                region={mapRegion}
+                district={mapDistrict}
+                onRegion={(slug) => {
+                  setMapRegion(slug)
+                  setMapDistrict(null)
+                }}
+                onDistrict={setMapDistrict}
               />
-            )}
-          </aside>
-        </div>
-        {draft && pinForm
-          ? createPortal(
-              <div className="lightbox-form">
+            </div>
+            <aside className="sidebar" id="site-panel">
+              {error ? <p className="error">{error}</p> : null}
+              {draft && !pinForm ? (
                 <FeatureForm
                   locale={locale}
                   draft={draft}
@@ -674,34 +526,200 @@ function AtlasApp() {
                       return
                     }
                     setFormError(null)
-                    void saveFeature(wikiDraftToWrite(draft), undefined, undefined)
+                    void saveFeature(
+                      wikiDraftToWrite(draft),
+                      creating ? undefined : selected?.slug,
+                      creating ? undefined : selected?.updatedAt,
+                    )
                       .then(async (saved) => {
-                        setOverlay((current) => [...current.filter((item) => item.id !== saved.id), saved])
+                        setOverlay((current) => [
+                          ...current.filter((item) => item.id !== saved.id),
+                          saved,
+                        ])
                         const commit = pinCommit.current
                         pinCommit.current = null
                         setPinForm(false)
                         setDraft(null)
                         setCreating(false)
-                        if (commit) await commit(saved.id)
+                        if (commit) {
+                          await commit(saved.id)
+                          return
+                        }
+                        setSelected(saved)
+                        go(featurePublicPath(locale, saved.kind, saved.slug))
+                        closeHistory()
                       })
                       .catch((err: Error) => setFormError(err.message))
                   }}
+                  onDelete={
+                    !creating && selected && wikiCanDelete(selected.id)
+                      ? () => {
+                          if (!window.confirm(text.deletePlaceConfirm)) return
+                          void deleteFeature(selected.slug, selected.updatedAt)
+                            .then(() => {
+                              setOverlay((current) => current.filter((item) => item.id !== selected.id))
+                              setDraft(null)
+                              setCreating(false)
+                              closePanel()
+                            })
+                            .catch((err: Error) => setFormError(err.message))
+                        }
+                      : undefined
+                  }
                 />
-              </div>,
-              document.body,
-            )
-          : null}
-        {signInIntent
-          ? createPortal(
-              <SignInPrompt
-                locale={locale}
-                intent={signInIntent}
-                signInHref={signInHrefFor(signInIntent)}
-                onClose={() => setSignInIntent(null)}
-              />,
-              document.body,
-            )
-          : null}
+              ) : (
+                <FeaturePanel
+                  locale={locale}
+                  site={site}
+                  features={panelFeatures}
+                  selected={selected}
+                  edges={edges}
+                  recent={recent}
+                  onSelectSlug={selectSlug}
+                  onBack={
+                    site
+                      ? () => {
+                          setSelected(null)
+                          go(canonicalPath(locale, '/'))
+                        }
+                      : undefined
+                  }
+                  onAdd={auth ? () => requireUser('add', startAdd) : undefined}
+                  onEdit={
+                    auth && selected ? () => requireUser('edit', () => startEdit(selected)) : undefined
+                  }
+                  audit={user ? audit : null}
+                  onShowHistory={
+                    user && selected ? () => loadHistory(selected.id) : undefined
+                  }
+                  photos={
+                    selected ? (
+                      <PlacePhotos
+                        featureId={selected.id}
+                        placeName={displayNames(selected, locale).title}
+                        canUpload={selected.lng != null && selected.lat != null}
+                        userSub={user?.sub ?? null}
+                        locale={locale}
+                        signInHref={signInHrefFor('photo')}
+                        onNeedSignIn={() => setSignInIntent('photo')}
+                        requestPick={photoRequestPick}
+                        onRequestPickConsumed={() => setPhotoRequestPick(false)}
+                        onOpenPlace={selectSlug}
+                        onCreatePlace={(request) => {
+                          pinCommit.current = request.commit
+                          setFormError(null)
+                          setCreating(true)
+                          setPinForm(true)
+                          setDraft({ ...emptyWikiDraft(request.lng, request.lat), nameEn: request.nameEn })
+                        }}
+                        onChange={() => {
+                          const view = mapView.current
+                          if (view) loadMapPhotos(view.bbox, view.zoom)
+                          if (historyOpen.current) loadHistory(selected.id)
+                        }}
+                      />
+                    ) : site ? (
+                      <PlacePhotos
+                        featureIds={site.establishmentIds}
+                        placeName={text.thisSite}
+                        canUpload={false}
+                        userSub={user?.sub ?? null}
+                        locale={locale}
+                        signInHref={signInHrefFor('photo')}
+                        onOpenPlace={selectSlug}
+                        onCreatePlace={(request) => {
+                          pinCommit.current = request.commit
+                          setFormError(null)
+                          setCreating(true)
+                          setPinForm(true)
+                          setDraft({ ...emptyWikiDraft(request.lng, request.lat), nameEn: request.nameEn })
+                        }}
+                        onChange={() => {
+                          const view = mapView.current
+                          if (view) loadMapPhotos(view.bbox, view.zoom)
+                        }}
+                      />
+                    ) : null
+                  }
+                  onRevert={
+                    user && selected
+                      ? (id) => {
+                          void revertAudit(id, selected.updatedAt)
+                            .then((result) => {
+                              if ('deleted' in result && result.deleted) {
+                                setOverlay((current) => current.filter((item) => item.id !== selected.id))
+                                closePanel()
+                                return
+                              }
+                              if (!('id' in result)) return
+                              setOverlay((current) => [
+                                ...current.filter((item) => item.id !== result.id),
+                                result,
+                              ])
+                              setSelected(result)
+                              go(featurePublicPath(locale, result.kind, result.slug))
+                              loadHistory(result.id)
+                            })
+                            .catch((err: Error) => setError(err.message))
+                        }
+                      : undefined
+                  }
+                />
+              )}
+            </aside>
+          </div>
+          {draft && pinForm
+            ? createPortal(
+                <div className="lightbox-form">
+                  <FeatureForm
+                    locale={locale}
+                    draft={draft}
+                    creating={creating}
+                    error={formError}
+                    onChange={setDraft}
+                    onCancel={() => {
+                      pinCommit.current = null
+                      setPinForm(false)
+                      setDraft(null)
+                      setCreating(false)
+                      setFormError(null)
+                    }}
+                    onSave={() => {
+                      if (draft.lng == null || draft.lat == null) {
+                        setFormError(text.clickMap)
+                        return
+                      }
+                      setFormError(null)
+                      void saveFeature(wikiDraftToWrite(draft), undefined, undefined)
+                        .then(async (saved) => {
+                          setOverlay((current) => [...current.filter((item) => item.id !== saved.id), saved])
+                          const commit = pinCommit.current
+                          pinCommit.current = null
+                          setPinForm(false)
+                          setDraft(null)
+                          setCreating(false)
+                          if (commit) await commit(saved.id)
+                        })
+                        .catch((err: Error) => setFormError(err.message))
+                    }}
+                  />
+                </div>,
+                document.body,
+              )
+            : null}
+          {signInIntent
+            ? createPortal(
+                <SignInPrompt
+                  locale={locale}
+                  intent={signInIntent}
+                  signInHref={signInHrefFor(signInIntent)}
+                  onClose={() => setSignInIntent(null)}
+                />,
+                document.body,
+              )
+            : null}
+        </>
+      )}
     </div>
   )
 }

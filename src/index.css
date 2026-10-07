@@ -92,6 +92,44 @@ body {
   gap: 16px;
 }
 
+.about-page {
+  flex: 1;
+  max-width: 40rem;
+  padding: 32px 24px 48px;
+  color: var(--foreground);
+}
+
+.about-page h2 {
+  margin: 0 0 8px;
+  font: 500 28px/1.25 var(--ui);
+}
+
+.about-page .about-category {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.about-page p {
+  margin: 0 0 1em;
+}
+
+.about-page ul {
+  margin: 0 0 1.25em;
+  padding-left: 1.25em;
+}
+
+.about-page li {
+  margin-bottom: 0.4em;
+}
+
+.about-page a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
 h2 .zh,
 h3 .zh,
 button .zh {
