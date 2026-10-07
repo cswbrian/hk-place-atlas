@@ -92,6 +92,17 @@ body {
   gap: 16px;
 }
 
+.chrome-about {
+  color: inherit;
+  font: 400 12px/1.2 var(--ui);
+  text-decoration: none;
+}
+
+.chrome-about:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .about-page {
   flex: 1;
   max-width: 40rem;

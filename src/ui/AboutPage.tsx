@@ -9,7 +9,7 @@ export function AboutPage({
 }) {
   const text = copy[locale]
   return (
-    <main className="about-page" lang={locale === 'zh-hk' ? 'zh-Hant' : 'en'}>
+    <main id="about-page" className="about-page" lang={locale === 'zh-hk' ? 'zh-Hant' : 'en'}>
       <h2>{text.aboutHeading}</h2>
       <p className="about-category">{text.category}</p>
       <p>{text.aboutLead}</p>

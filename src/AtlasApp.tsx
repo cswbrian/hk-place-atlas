@@ -235,8 +235,13 @@ function AtlasApp() {
       setSearch(search)
     }
     document.documentElement.lang = locale === 'zh-hk' ? 'zh-Hant-HK' : 'en'
-    document.title = selected ? `${displayNames(selected, locale).title} · ${text.title}` : text.title
-  }, [path, locale, rest, text.title, selected, search])
+    document.title =
+      rest === '/about'
+        ? text.aboutSeoTitle
+        : selected
+          ? `${displayNames(selected, locale).title} · ${text.title}`
+          : text.title
+  }, [path, locale, rest, text.title, text.aboutSeoTitle, selected, search])
 
   useEffect(() => {
     const onPop = () => {
@@ -433,14 +438,18 @@ function AtlasApp() {
 
   return (
     <div className="app">
-      <a className="skip-link" href="#site-panel">
-        Skip to site panel
-      </a>
+      {rest === '/about' ? (
+        <a className="skip-link" href="#about-page">
+          Skip to content
+        </a>
+      ) : (
+        <a className="skip-link" href="#site-panel">
+          Skip to site panel
+        </a>
+      )}
       <header className="chrome">
         <div className="chrome-brand">
           <h1>{text.title}</h1>
-        </div>
-        <nav className="lang-switch" aria-label="Language">
           <a
             href={`/${locale}/about`}
             className="chrome-about"
@@ -452,6 +461,8 @@ function AtlasApp() {
           >
             {text.aboutNav}
           </a>
+        </div>
+        <nav className="lang-switch" aria-label="Language">
           <a
             href={`${switchLocalePath(path, otherLocale)}${search}`}
             hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
@@ -707,19 +718,19 @@ function AtlasApp() {
                 document.body,
               )
             : null}
-          {signInIntent
-            ? createPortal(
-                <SignInPrompt
-                  locale={locale}
-                  intent={signInIntent}
-                  signInHref={signInHrefFor(signInIntent)}
-                  onClose={() => setSignInIntent(null)}
-                />,
-                document.body,
-              )
-            : null}
         </>
       )}
+      {signInIntent
+        ? createPortal(
+            <SignInPrompt
+              locale={locale}
+              intent={signInIntent}
+              signInHref={signInHrefFor(signInIntent)}
+              onClose={() => setSignInIntent(null)}
+            />,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
