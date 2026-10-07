@@ -57,6 +57,17 @@ GA4 Measurement ID `G-NKVYYE1Y49` is set in `wrangler.jsonc` (`GA_MEASUREMENT_ID
 
 Fallback if DNS TXT is slow: URL-prefix property `https://hkatlas.fyi` verified via Google Analytics (gtag already on the homepage).
 
+### After SEO discoverability deploy
+
+1. Confirm view-source on `https://hkatlas.fyi/en` shows title `HK Atlas — Hong Kong history map of places`.
+2. Confirm `https://hkatlas.fyi/en/about` and `/zh-hk/about` return HTML with Spatial History Database / 空間歷史資料庫 copy.
+3. Confirm `og:image` points at `https://hkatlas.fyi/og.png` and that URL loads.
+4. Search Console → Sitemaps → resubmit `https://hkatlas.fyi/sitemap.xml` if needed.
+5. URL inspection → request indexing for `/en`, `/zh-hk`, `/en/about`, `/zh-hk/about`.
+6. Optional: Bing Webmaster Tools → submit the same sitemap.
+
+Positioning: HK Atlas is a Spatial History Database (空間歷史資料庫) — bilingual map of Hong Kong places over time.
+
 ## Layout
 
 - `src/domain` — Feature, locale, catalog, site query, SEO
