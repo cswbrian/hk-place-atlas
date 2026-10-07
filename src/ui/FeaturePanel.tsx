@@ -72,43 +72,45 @@ export function FeaturePanel({
             </ul>
           </section>
         ) : null}
-        <section className="detail">
-          {audit == null ? (
-            <h3>
-              <button type="button" className="linkish" onClick={onShowHistory}>
-                {text.history}
-              </button>
-            </h3>
-          ) : (
-            <>
-              <h3>{text.history}</h3>
-              {audit.length === 0 ? (
-                <p className="hint">{text.noHistory}</p>
-              ) : (
-                <ul className="ref-list">
-                  {audit.map((entry) => (
-                    <li key={entry.id}>
-                      <span>
-                        {entry.at.slice(0, 10)} ·{' '}
-                        {entry.entityType === 'photo'
-                          ? entry.action === 'delete'
-                            ? text.photoRemoved
-                            : text.photoAdded
-                          : entry.action}{' '}
-                        · {entry.actorEmail || 'wiki'}
-                      </span>
-                      {onRevert && entry.entityType !== 'photo' ? (
-                        <button type="button" className="linkish" onClick={() => onRevert(entry.id)}>
-                          {text.revert}
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-        </section>
+        {onShowHistory ? (
+          <section className="detail">
+            {audit == null ? (
+              <h3>
+                <button type="button" className="linkish" onClick={onShowHistory}>
+                  {text.history}
+                </button>
+              </h3>
+            ) : (
+              <>
+                <h3>{text.history}</h3>
+                {audit.length === 0 ? (
+                  <p className="hint">{text.noHistory}</p>
+                ) : (
+                  <ul className="ref-list">
+                    {audit.map((entry) => (
+                      <li key={entry.id}>
+                        <span>
+                          {entry.at.slice(0, 10)} ·{' '}
+                          {entry.entityType === 'photo'
+                            ? entry.action === 'delete'
+                              ? text.photoRemoved
+                              : text.photoAdded
+                            : entry.action}{' '}
+                          · {entry.actorEmail || 'wiki'}
+                        </span>
+                        {onRevert && entry.entityType !== 'photo' ? (
+                          <button type="button" className="linkish" onClick={() => onRevert(entry.id)}>
+                            {text.revert}
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </section>
+        ) : null}
       </>
     )
   }
@@ -125,7 +127,7 @@ export function FeaturePanel({
           labels={{
             title: text.thisSite,
             empty: text.emptySite,
-            add: text.add,
+            add: text.addPlace,
           }}
         />
         {photos}
@@ -161,7 +163,7 @@ export function FeaturePanel({
       ) : null}
       {onAdd ? (
         <button type="button" className="primary" onClick={onAdd}>
-          {text.add}
+          {text.addPlace}
         </button>
       ) : null}
     </div>

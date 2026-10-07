@@ -29,6 +29,24 @@ describe('PlacePhotos add flow', () => {
     expect(html).not.toContain('Upload the image first')
     expect(html).not.toContain('>Upload<')
   })
+
+  it('offers Add photo when signed out without a file input', () => {
+    const html = renderToStaticMarkup(
+      createElement(PlacePhotos, {
+        featureId: 'place-1',
+        placeName: 'Euro Trade Centre',
+        canUpload: true,
+        userSub: null,
+        locale: 'en',
+        signInHref: '/api/auth/google',
+        onNeedSignIn: () => {},
+        onOpenPlace: () => {},
+        onCreatePlace: () => {},
+      }),
+    )
+    expect(html).toContain('Add photo')
+    expect(html).not.toContain('type="file"')
+  })
 })
 
 describe('PlacePhotos site browse', () => {

@@ -48,6 +48,14 @@ import { fetchLotsInWgsBounds } from './ui/lots/lotApi'
 import { fetchPhotos } from './api/photos'
 import { PHOTO_MAP_ZOOM, type PhotoPin } from './domain/photo'
 import { PlacePhotos } from './ui/PlacePhotos'
+import { SignInPrompt } from './ui/SignInPrompt'
+import {
+  parseAuthIntent,
+  stripAuthIntent,
+  withAuthIntent,
+  type AuthIntent,
+  type SignInPromptIntent,
+} from './domain/authIntent'
 
 const EMPTY_CATALOG: CatalogGeojson = { type: 'FeatureCollection', features: [] }
 const HK_BBOX = { west: 113.8, south: 22.15, east: 114.45, north: 22.58 }
@@ -98,6 +106,8 @@ function AtlasApp() {
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [pinForm, setPinForm] = useState(false)
+  const [signInIntent, setSignInIntent] = useState<SignInPromptIntent | null>(null)
+  const [photoRequestPick, setPhotoRequestPick] = useState(false)
   const pinCommit = useRef<((featureId: string) => Promise<void>) | null>(null)
   const [mapRegion, setMapRegion] = useState<string | null>(null)
   const [mapDistrict, setMapDistrict] = useState<string | null>(null)
@@ -154,6 +164,49 @@ function AtlasApp() {
     setPath(url.pathname)
     setSearch(url.search)
   }, [])
+
+  const signInHrefFor = useCallback(
+    (intent?: SignInPromptIntent) => {
+      const target =
+        intent && intent !== 'contribute' ? withAuthIntent(path + search, intent) : path + search
+      return `/api/auth/google?return=${encodeURIComponent(target)}`
+    },
+    [path, search],
+  )
+
+  const startAdd = useCallback(() => {
+    setFormError(null)
+    setCreating(true)
+    setDraft(emptyWikiDraft(site?.lng ?? selected?.lng ?? null, site?.lat ?? selected?.lat ?? null))
+  }, [site, selected])
+
+  const startEdit = useCallback((feature: Feature) => {
+    setFormError(null)
+    setCreating(false)
+    setDraft(wikiDraftFromFeature(feature))
+  }, [])
+
+  const requireUser = useCallback(
+    (intent: AuthIntent, action: () => void) => {
+      if (user) action()
+      else setSignInIntent(intent)
+    },
+    [user],
+  )
+
+  useEffect(() => {
+    const intent = parseAuthIntent(search)
+    if (!user || !intent) return
+    if ((intent === 'edit' || intent === 'photo') && !selected) return
+
+    const nextSearch = stripAuthIntent(search)
+    setSearch(nextSearch)
+    window.history.replaceState({}, '', `${path}${nextSearch}`)
+
+    if (intent === 'add') startAdd()
+    else if (intent === 'edit' && selected) startEdit(selected)
+    else if (intent === 'photo') setPhotoRequestPick(true)
+  }, [user, selected, search, path, startAdd, startEdit])
 
   const openedDefaultPlace = useRef(false)
   useEffect(() => {
@@ -399,7 +452,9 @@ function AtlasApp() {
             {text.otherLanguage}
           </a>
           {auth && !user ? (
-            <a href={`/api/auth/google?return=${encodeURIComponent(path + search)}`}>{text.signIn}</a>
+            <button type="button" className="linkish" onClick={() => setSignInIntent('contribute')}>
+              {text.signIn}
+            </button>
           ) : null}
           {user ? (
             <span className="atlas-user">
@@ -513,35 +568,26 @@ function AtlasApp() {
                       }
                     : undefined
                 }
-                onAdd={
-                  user
-                    ? () => {
-                        setFormError(null)
-                        setCreating(true)
-                        setDraft(emptyWikiDraft(site?.lng ?? selected?.lng ?? null, site?.lat ?? selected?.lat ?? null))
-                      }
-                    : undefined
-                }
+                onAdd={auth ? () => requireUser('add', startAdd) : undefined}
                 onEdit={
-                  user && selected
-                    ? () => {
-                        setFormError(null)
-                        setCreating(false)
-                        setDraft(wikiDraftFromFeature(selected))
-                      }
-                    : undefined
+                  auth && selected ? () => requireUser('edit', () => startEdit(selected)) : undefined
                 }
-                audit={audit}
-                onShowHistory={selected ? () => loadHistory(selected.id) : undefined}
+                audit={user ? audit : null}
+                onShowHistory={
+                  user && selected ? () => loadHistory(selected.id) : undefined
+                }
                 photos={
                   selected ? (
                     <PlacePhotos
                       featureId={selected.id}
                       placeName={displayNames(selected, locale).title}
-                      canUpload={Boolean(user) && selected.lng != null && selected.lat != null}
+                      canUpload={selected.lng != null && selected.lat != null}
                       userSub={user?.sub ?? null}
                       locale={locale}
-                      signInHref={`/api/auth/google?return=${encodeURIComponent(path + search)}`}
+                      signInHref={signInHrefFor('photo')}
+                      onNeedSignIn={() => setSignInIntent('photo')}
+                      requestPick={photoRequestPick}
+                      onRequestPickConsumed={() => setPhotoRequestPick(false)}
                       onOpenPlace={selectSlug}
                       onCreatePlace={(request) => {
                         pinCommit.current = request.commit
@@ -563,7 +609,7 @@ function AtlasApp() {
                       canUpload={false}
                       userSub={user?.sub ?? null}
                       locale={locale}
-                      signInHref={`/api/auth/google?return=${encodeURIComponent(path + search)}`}
+                      signInHref={signInHrefFor('photo')}
                       onOpenPlace={selectSlug}
                       onCreatePlace={(request) => {
                         pinCommit.current = request.commit
@@ -642,6 +688,17 @@ function AtlasApp() {
                   }}
                 />
               </div>,
+              document.body,
+            )
+          : null}
+        {signInIntent
+          ? createPortal(
+              <SignInPrompt
+                locale={locale}
+                intent={signInIntent}
+                signInHref={signInHrefFor(signInIntent)}
+                onClose={() => setSignInIntent(null)}
+              />,
               document.body,
             )
           : null}

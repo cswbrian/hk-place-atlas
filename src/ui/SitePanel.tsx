@@ -126,8 +126,7 @@ export function SitePanel({
   const editLabel = text.edit
 
   return (
-    <article className="detail site-panel">
-      <h2>{title}</h2>
+    <article className="detail site-panel" aria-label={title}>
       {siteEstablishments.length > 0 ? (
         <p className="muted">{text.sitePickPlace}</p>
       ) : null}

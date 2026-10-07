@@ -21,6 +21,9 @@ type Props = {
   userSub: string | null
   locale: SiteLocale
   signInHref: string
+  onNeedSignIn?: () => void
+  requestPick?: boolean
+  onRequestPickConsumed?: () => void
   onOpenPlace: (slug: string, kind: FeatureKind) => void
   onCreatePlace: (request: {
     nameEn: string
@@ -46,6 +49,9 @@ export function PlacePhotos({
   userSub,
   locale,
   signInHref,
+  onNeedSignIn,
+  requestPick = false,
+  onRequestPickConsumed,
   onOpenPlace,
   onCreatePlace,
   onChange,
@@ -56,6 +62,7 @@ export function PlacePhotos({
   const homeFeatureId = featureId ?? ''
   const allowUpload = Boolean(canUpload && featureId)
   const fileInput = useRef<HTMLInputElement>(null)
+  const addButton = useRef<HTMLButtonElement>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -81,6 +88,13 @@ export function PlacePhotos({
       cancel = true
     }
   }, [idsKey])
+
+  useEffect(() => {
+    if (!requestPick || !userSub || !allowUpload) return
+    fileInput.current?.click()
+    addButton.current?.focus()
+    onRequestPickConsumed?.()
+  }, [requestPick, userSub, allowUpload, onRequestPickConsumed])
 
   async function onPicked(file: File | null) {
     if (!file || !featureId) return
@@ -194,24 +208,37 @@ export function PlacePhotos({
           )
         })}
       </ul>
-      {userSub && allowUpload ? (
+      {allowUpload ? (
         <>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0] ?? null
-              void onPicked(file)
+          {userSub ? (
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null
+                void onPicked(file)
+              }}
+            />
+          ) : null}
+          <button
+            ref={addButton}
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              if (!userSub) {
+                onNeedSignIn?.()
+                return
+              }
+              fileInput.current?.click()
             }}
-          />
-          <button type="button" disabled={pending} onClick={() => fileInput.current?.click()}>
+          >
             {pending ? text.uploadPhoto : text.addPhoto}
           </button>
         </>
       ) : null}
-      {userSub && featureId && !allowUpload ? <p className="muted">{text.photoPlace}</p> : null}
+      {featureId && !allowUpload ? <p className="muted">{text.photoPlace}</p> : null}
       {error ? <p className="error">{error}</p> : null}
       {openIndex >= 0 ? (
         <PhotoLightbox

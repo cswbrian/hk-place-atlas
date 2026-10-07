@@ -263,6 +263,22 @@ button,
   transition: color 100ms, background-color 100ms, border-color 100ms;
 }
 
+a.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--foreground);
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 100ms, background-color 100ms, border-color 100ms;
+}
+
 button:hover,
 .upload:hover {
   background: var(--foreground);
@@ -288,12 +304,14 @@ button:disabled:hover {
   color: var(--foreground);
 }
 
-.primary {
+.primary,
+a.primary {
   background: var(--foreground);
   color: var(--background);
 }
 
-.primary:hover {
+.primary:hover,
+a.primary:hover {
   background: var(--background);
   color: var(--foreground);
 }
@@ -623,12 +641,15 @@ fieldset legend {
   font: 400 12px/1.2 var(--ui);
 }
 
-.lang-switch a {
+.lang-switch a,
+.lang-switch .linkish {
   color: inherit;
+  font-weight: 400;
   text-decoration: none;
 }
 
-.lang-switch a:hover {
+.lang-switch a:hover,
+.lang-switch .linkish:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -834,6 +855,99 @@ button.photo-delete:hover {
 
 button.photo-delete:hover {
   opacity: 0.65;
+}
+
+.sign-in-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 4300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.sign-in-prompt-panel {
+  position: relative;
+  width: min(380px, 100%);
+  padding: 20px 44px 20px 20px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.sign-in-prompt-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.sign-in-prompt-close:hover {
+  background: transparent;
+  color: var(--foreground);
+  opacity: 0.65;
+}
+
+.sign-in-prompt-panel h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  padding-right: 4px;
+}
+
+.sign-in-prompt-panel p {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+.sign-in-prompt-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.google-sign-in {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px 0 10px;
+  border: 1px solid #747775;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.15px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 100ms, box-shadow 100ms;
+}
+
+.google-sign-in:hover {
+  background: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+.google-sign-in:focus-visible {
+  outline: 3px solid #0b57d0;
+  outline-offset: 2px;
+}
+
+.google-sign-in-mark {
+  flex: 0 0 auto;
+  display: block;
 }
 
 .lightbox,
@@ -1079,8 +1193,9 @@ button.photo-delete:hover {
     border-top: 1px solid #333;
     max-height: 40vh;
   }
-  button:not(.linkish):not(.ghost):not(.chip):not(.photo-thumb):not(.photo-delete):not(.photo-pin-name):not(.photo-pin-remove):not(.lightbox-icon),
-  .upload {
+  button:not(.linkish):not(.ghost):not(.chip):not(.photo-thumb):not(.photo-delete):not(.photo-pin-name):not(.photo-pin-remove):not(.lightbox-icon):not(.sign-in-prompt-close),
+  .upload,
+  a.primary {
     min-height: 44px;
   }
 }
