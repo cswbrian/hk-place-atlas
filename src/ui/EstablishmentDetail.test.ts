@@ -61,7 +61,7 @@ const earlier = place({
   demolished: { year: 1961, circa: true },
 })
 
-function render(locale: 'en' | 'zh-hk') {
+function render(locale: 'en' | 'hk') {
   return renderToStaticMarkup(
     createElement(EstablishmentDetail, {
       establishment: current,
@@ -74,7 +74,7 @@ function render(locale: 'en' | 'zh-hk') {
 
 describe('EstablishmentDetail', () => {
   it('translates demolished and omits standing from the date line', () => {
-    expect(render('zh-hk')).toContain('1966 – 1980 · 已拆卸')
+    expect(render('hk')).toContain('1966 – 1980 · 已拆卸')
     expect(render('en')).toContain('1966 – 1980 · Demolished')
 
     const standing = place({

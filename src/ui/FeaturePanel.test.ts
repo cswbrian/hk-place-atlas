@@ -53,10 +53,10 @@ describe('FeaturePanel welcome counts', () => {
     expect(html).not.toContain('Community-driven directory mapping local history.')
   })
 
-  it('uses the Chinese count line on the zh-hk site', () => {
+  it('uses the Chinese count line on the hk site', () => {
     const html = renderToStaticMarkup(
       createElement(FeaturePanel, {
-        locale: 'zh-hk',
+        locale: 'hk',
         site: null,
         features: [],
         selected: null,

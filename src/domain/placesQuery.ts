@@ -47,7 +47,7 @@ export function parsePlacesListQuery(params: URLSearchParams, locale: SiteLocale
   const rawLetter = (params.get('letter') ?? '').toUpperCase()
   const letter = q ? null : rawLetter === '#' || /^[A-Z]$/.test(rawLetter) ? rawLetter : null
   const filters = readPlacesFilters(params)
-  return { page, pageSize, letter, q, ...filters, locale: locale === 'zh-hk' ? 'zh-hk' : 'en' }
+  return { page, pageSize, letter, q, ...filters, locale: locale === 'hk' ? 'hk' : 'en' }
 }
 
 export function clampPage(page: number, total: number, pageSize: number): number {
@@ -59,7 +59,7 @@ export function clampPage(page: number, total: number, pageSize: number): number
 }
 
 export function placesOrderSql(locale: SiteLocale): string {
-  return locale === 'zh-hk'
+  return locale === 'hk'
     ? 'name_zh COLLATE NOCASE, name_en COLLATE NOCASE, slug'
     : 'name_en COLLATE NOCASE, name_zh COLLATE NOCASE, slug'
 }

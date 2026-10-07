@@ -335,7 +335,7 @@ async function listInBbox(request: Request, env: Env, touchedOnly: boolean): Pro
 async function handleAuthGoogle(request: Request, env: Env): Promise<Response> {
   if (!env.GOOGLE_CLIENT_ID || !env.SESSION_SECRET) return json({ error: 'auth not configured' }, 503)
   const url = new URL(request.url)
-  const returnTo = url.searchParams.get('return') || '/en'
+  const returnTo = url.searchParams.get('return') || '/hk'
   const nonce = crypto.randomUUID()
   const origin = publicOrigin(request, env)
   const redirectUri = `${origin}/api/auth/callback`
@@ -366,7 +366,7 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
   const fail = () =>
     new Response(null, {
       status: 302,
-      headers: { location: `${origin}/en`, 'set-cookie': clearCookie(OAUTH_COOKIE, secure) },
+      headers: { location: `${origin}/hk`, 'set-cookie': clearCookie(OAUTH_COOKIE, secure) },
     })
   try {
     if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.SESSION_SECRET) return fail()
@@ -588,9 +588,11 @@ async function serveCached(
   ctx: ExecutionContext,
   maxAge: number,
   load: () => Promise<Response>,
+  cacheEpoch?: string,
 ): Promise<Response> {
   const url = new URL(request.url)
   url.searchParams.sort()
+  if (cacheEpoch) url.searchParams.set('__cache', cacheEpoch)
   const key = new Request(url.toString(), { method: 'GET' })
   const hit = await caches.default.match(key)
   if (hit) return hit
@@ -611,7 +613,9 @@ function cachedRead(
 ): Promise<Response> {
   const maxAge = publicReadCacheSeconds(route, request.method)
   if (!maxAge) return load()
-  return serveCached(request, ctx, maxAge, load)
+  // Bump when sitemap URL shape changes so Cache API does not keep stale chunks.
+  const cacheEpoch = route.type === 'sitemap' ? 'locale-hk' : undefined
+  return serveCached(request, ctx, maxAge, load, cacheEpoch)
 }
 
 async function handleRecent(env: Env): Promise<Response> {
@@ -1134,11 +1138,11 @@ export default {
     if (route.type === 'authLogout' && (request.method === 'GET' || request.method === 'POST')) {
       const origin = publicOrigin(request, env)
       const secure = origin.startsWith('https:')
-      const returnTo = url.searchParams.get('return') || '/en'
+      const returnTo = url.searchParams.get('return') || '/hk'
       return new Response(null, {
         status: 302,
         headers: {
-          location: returnTo.startsWith('/') ? returnTo : '/en',
+          location: returnTo.startsWith('/') ? returnTo : '/hk',
           'set-cookie': clearCookie(SESSION_COOKIE, secure),
         },
       })

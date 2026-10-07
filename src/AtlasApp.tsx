@@ -158,7 +158,7 @@ function AtlasApp() {
   const { locale, rest } = parseLocalePath(path)
   const featurePath = parseFeaturePath(rest)
   const text = copy[locale]
-  const otherLocale: SiteLocale = locale === 'en' ? 'zh-hk' : 'en'
+  const otherLocale: SiteLocale = locale === 'en' ? 'hk' : 'en'
   const visible = useMemo(() => mergeOverlay(catalog, overlay), [catalog, overlay])
   const mapFocus = mapDistrict ? districtBbox(mapDistrict) : null
 
@@ -244,7 +244,7 @@ function AtlasApp() {
       setPath(next)
       setSearch(search)
     }
-    document.documentElement.lang = locale === 'zh-hk' ? 'zh-Hant-HK' : 'en'
+    document.documentElement.lang = locale === 'hk' ? 'zh-Hant-HK' : 'en'
     document.title =
       rest === '/about'
         ? text.aboutSeoTitle
@@ -519,8 +519,8 @@ function AtlasApp() {
             <nav className="lang-switch" aria-label="Language">
               <a
                 href={`${switchLocalePath(path, otherLocale)}${search}`}
-                hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
-                lang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
+                hrefLang={otherLocale === 'hk' ? 'zh-Hant' : 'en'}
+                lang={otherLocale === 'hk' ? 'zh-Hant' : 'en'}
                 onClick={(event) => {
                   event.preventDefault()
                   go(`${switchLocalePath(path, otherLocale)}${search}`)

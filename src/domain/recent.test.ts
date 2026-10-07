@@ -26,11 +26,11 @@ describe('updatedAgo', () => {
   })
 
   it('uses Chinese labels', () => {
-    expect(updatedAgo('2026-10-06T00:59:30.000Z', now, 'zh-hk')).toBe('剛剛更新')
-    expect(updatedAgo('2026-10-06T00:58:00.000Z', now, 'zh-hk')).toBe('2 分鐘前更新')
-    expect(updatedAgo('2026-10-05T23:00:00.000Z', now, 'zh-hk')).toBe('2 小時前更新')
-    expect(updatedAgo('2026-10-04T01:00:00.000Z', now, 'zh-hk')).toBe('2 日前更新')
-    expect(updatedAgo('2026-08-01T00:00:00.000Z', now, 'zh-hk')).toBe('2026年8月1日更新')
+    expect(updatedAgo('2026-10-06T00:59:30.000Z', now, 'hk')).toBe('剛剛更新')
+    expect(updatedAgo('2026-10-06T00:58:00.000Z', now, 'hk')).toBe('2 分鐘前更新')
+    expect(updatedAgo('2026-10-05T23:00:00.000Z', now, 'hk')).toBe('2 小時前更新')
+    expect(updatedAgo('2026-10-04T01:00:00.000Z', now, 'hk')).toBe('2 日前更新')
+    expect(updatedAgo('2026-08-01T00:00:00.000Z', now, 'hk')).toBe('2026年8月1日更新')
   })
 
   it('returns nothing when the stamp is missing or invalid', () => {

@@ -1,6 +1,6 @@
 import type { FeatureKind } from './feature'
 
-export type SiteLocale = 'en' | 'zh-hk'
+export type SiteLocale = 'en' | 'hk'
 
 export type LocalePath = {
   locale: SiteLocale
@@ -139,7 +139,7 @@ export const copy = {
     sources: 'Sources',
     images: 'Images',
   },
-  'zh-hk': {
+  hk: {
     title: '香港地圖集',
     tagline: '社群協作的城市歷史地圖目錄',
     seoTitle: '香港地圖集 — 歷史地圖',
@@ -263,7 +263,7 @@ export const copy = {
   },
 } as const
 
-const LOCALES = new Set<SiteLocale>(['en', 'zh-hk'])
+const LOCALES = new Set<SiteLocale>(['en', 'hk'])
 
 function normalizeRest(rest: string): string {
   if (!rest || rest === '/') return '/'
@@ -277,7 +277,7 @@ export function parseLocalePath(pathname: string): LocalePath {
     const rest = parts.slice(1).join('/')
     return { locale: first as SiteLocale, rest: rest ? `/${rest}` : '/' }
   }
-  return { locale: 'en', rest: normalizeRest(pathname) }
+  return { locale: 'hk', rest: normalizeRest(pathname) }
 }
 
 export function switchLocalePath(pathname: string, locale: SiteLocale): string {
@@ -312,7 +312,7 @@ export function featurePublicPath(locale: SiteLocale, kind: FeatureKind, slug: s
 }
 
 export function catalogCountLine(places: number, photos: number, locale: SiteLocale): string {
-  if (locale === 'zh-hk') return `${places} 個地點，${photos} 張相片，共同記錄`
+  if (locale === 'hk') return `${places} 個地點，${photos} 張相片，共同記錄`
   const placeWord = places === 1 ? 'place' : 'places'
   const photoWord = photos === 1 ? 'photo' : 'photos'
   return `${places} ${placeWord}, ${photos} ${photoWord}, and growing.`
@@ -324,7 +324,7 @@ export function displayNames(
 ): { title: string; secondary: string | null } {
   const en = names.nameEn.trim()
   const zh = names.nameZh.trim()
-  if (locale === 'zh-hk') {
+  if (locale === 'hk') {
     const title = zh || en
     return { title, secondary: en && en !== title ? en : null }
   }

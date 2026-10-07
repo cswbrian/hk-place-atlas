@@ -40,10 +40,10 @@ describe('wikiDraftToWrite', () => {
 })
 
 describe('FeatureForm labels', () => {
-  it('uses Traditional Chinese for status and dates on the zh-hk site', () => {
+  it('uses Traditional Chinese for status and dates on the hk site', () => {
     const html = renderToStaticMarkup(
       createElement(FeatureForm, {
-        locale: 'zh-hk',
+        locale: 'hk',
         draft: emptyWikiDraft(null, null),
         creating: false,
         error: null,
@@ -81,7 +81,7 @@ describe('FeatureForm labels', () => {
   it('lets an uncertain start or end year be marked circa', () => {
     const html = renderToStaticMarkup(
       createElement(FeatureForm, {
-        locale: 'zh-hk',
+        locale: 'hk',
         draft: { ...emptyWikiDraft(null, null), startYear: '1982', startCirca: true, endYear: '1990' },
         creating: false,
         error: null,

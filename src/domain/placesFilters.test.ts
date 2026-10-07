@@ -73,9 +73,9 @@ describe('PLACE_DECADES', () => {
 describe('placeChipLabel', () => {
   it('uses the locale label and a decade suffix', () => {
     expect(placeChipLabel('en', { en: 'Kowloon', zh: '九龍' })).toBe('Kowloon')
-    expect(placeChipLabel('zh-hk', { en: 'Kowloon', zh: '九龍' })).toBe('九龍')
+    expect(placeChipLabel('hk', { en: 'Kowloon', zh: '九龍' })).toBe('九龍')
     expect(placeChipLabel('en', 1980)).toBe('1980s')
-    expect(placeChipLabel('zh-hk', 1980)).toBe('1980')
+    expect(placeChipLabel('hk', 1980)).toBe('1980')
   })
 })
 
@@ -84,9 +84,9 @@ describe('placeFilterGroupLabel', () => {
     expect(placeFilterGroupLabel('region', 'en')).toBe('Region')
     expect(placeFilterGroupLabel('district', 'en')).toBe('District')
     expect(placeFilterGroupLabel('decade', 'en')).toBe('Decade')
-    expect(placeFilterGroupLabel('region', 'zh-hk')).toBe('區域')
-    expect(placeFilterGroupLabel('district', 'zh-hk')).toBe('區')
-    expect(placeFilterGroupLabel('decade', 'zh-hk')).toBe('年代')
+    expect(placeFilterGroupLabel('region', 'hk')).toBe('區域')
+    expect(placeFilterGroupLabel('district', 'hk')).toBe('區')
+    expect(placeFilterGroupLabel('decade', 'hk')).toBe('年代')
   })
 })
 

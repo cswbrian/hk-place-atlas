@@ -2,7 +2,7 @@
 
 Bilingual public map of Hong Kong buildings, shops, and events.
 
-Live: [https://hkatlas.fyi/en](https://hkatlas.fyi/en) or `/zh-hk`.
+Live: [https://hkatlas.fyi/hk](https://hkatlas.fyi/hk) or `/en`.
 
 Living spec: [docs/superpowers/specs/2026-09-16-hk-scale-cloud-atlas.md](docs/superpowers/specs/2026-09-16-hk-scale-cloud-atlas.md)
 
@@ -17,7 +17,7 @@ npm run seed
 npm run dev
 ```
 
-Open [http://localhost:5173/en](http://localhost:5173/en) or `/zh-hk`. `npm run seed -- --sample 2000` is a smaller local catalog.
+Open [http://localhost:5173/hk](http://localhost:5173/hk) or `/en`. `npm run seed -- --sample 2000` is a smaller local catalog.
 
 1. Clustered pins, no login. Every place with coordinates is shown, including demolished ones.
 2. Pan and zoom — clusters split.
@@ -52,18 +52,18 @@ GA4 Measurement ID `G-NKVYYE1Y49` is set in `wrangler.jsonc` (`GA_MEASUREMENT_ID
 2. Add property → **Domain** → `hkatlas.fyi`.
 3. Verify with the DNS TXT record on the Cloudflare zone **hkatlas.fyi** (DNS → TXT at `@`).
 4. Sitemaps → submit `https://hkatlas.fyi/sitemap.xml`.
-5. URL inspection → request indexing for `https://hkatlas.fyi/en` and `https://hkatlas.fyi/zh-hk`.
+5. URL inspection → request indexing for `https://hkatlas.fyi/hk` and `https://hkatlas.fyi/en`.
 6. Link GA4: Search Console → Settings → Associations, and GA4 Admin → Product links → Search Console.
 
 Fallback if DNS TXT is slow: URL-prefix property `https://hkatlas.fyi` verified via Google Analytics (gtag already on the homepage).
 
 ### After SEO discoverability deploy
 
-1. Confirm view-source on `https://hkatlas.fyi/en` shows title `HONG KONG ATLAS — Hong Kong history map of places`.
-2. Confirm `https://hkatlas.fyi/en/about` and `/zh-hk/about` return HTML with Spatial History Database / 空間歷史資料庫 copy.
+1. Confirm view-source on `https://hkatlas.fyi/hk` shows title `香港地圖集 — 歷史地圖`.
+2. Confirm `https://hkatlas.fyi/hk/about` and `/en/about` return HTML with 空間歷史資料庫 / Spatial History Database copy.
 3. Confirm `og:image` points at `https://hkatlas.fyi/og.png` and that URL loads.
 4. Search Console → Sitemaps → resubmit `https://hkatlas.fyi/sitemap.xml` if needed.
-5. URL inspection → request indexing for `/en`, `/zh-hk`, `/en/about`, `/zh-hk/about`.
+5. URL inspection → request indexing for `/hk`, `/en`, `/hk/about`, `/en/about`.
 6. Optional: Bing Webmaster Tools → submit the same sitemap.
 
 Positioning: HONG KONG ATLAS is a Spatial History Database (空間歷史資料庫) — bilingual map of Hong Kong places over time.

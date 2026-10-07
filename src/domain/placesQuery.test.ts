@@ -30,7 +30,7 @@ describe('parsePlacesListQuery', () => {
       locale: 'en',
     })
     const params = new URLSearchParams('page=2&letter=j&q=house&pageSize=999')
-    expect(parsePlacesListQuery(params, 'zh-hk')).toEqual({
+    expect(parsePlacesListQuery(params, 'hk')).toEqual({
       page: 2,
       pageSize: 100,
       letter: null,
@@ -38,7 +38,7 @@ describe('parsePlacesListQuery', () => {
       region: null,
       district: null,
       decade: null,
-      locale: 'zh-hk',
+      locale: 'hk',
     })
   })
 

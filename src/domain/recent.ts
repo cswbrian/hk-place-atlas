@@ -49,12 +49,12 @@ function calendar(then: number, locale: SiteLocale): string {
   const day = date.getUTCDate()
   const month = date.getUTCMonth()
   const year = date.getUTCFullYear()
-  if (locale === 'zh-hk') return `${year}年${month + 1}月${day}日更新`
+  if (locale === 'hk') return `${year}年${month + 1}月${day}日更新`
   return `updated ${day} ${MONTHS[month]} ${year}`
 }
 
 function countLabel(count: number, one: string, many: string, locale: SiteLocale): string {
-  if (locale === 'zh-hk') return `${count} ${many}`
+  if (locale === 'hk') return `${count} ${many}`
   return count === 1 ? `updated 1 ${one} ago` : `updated ${count} ${many} ago`
 }
 
@@ -62,10 +62,10 @@ export function updatedAgo(updatedAt: string, now: Date, locale: SiteLocale): st
   const then = Date.parse(updatedAt)
   if (!updatedAt || Number.isNaN(then)) return ''
   const delta = Math.max(0, now.getTime() - then)
-  if (delta < MINUTE) return locale === 'zh-hk' ? '剛剛更新' : 'updated just now'
-  if (delta < HOUR) return countLabel(Math.floor(delta / MINUTE), 'minute', locale === 'zh-hk' ? '分鐘前更新' : 'minutes', locale)
-  if (delta < DAY) return countLabel(Math.floor(delta / HOUR), 'hour', locale === 'zh-hk' ? '小時前更新' : 'hours', locale)
-  if (delta < MONTH) return countLabel(Math.floor(delta / DAY), 'day', locale === 'zh-hk' ? '日前更新' : 'days', locale)
+  if (delta < MINUTE) return locale === 'hk' ? '剛剛更新' : 'updated just now'
+  if (delta < HOUR) return countLabel(Math.floor(delta / MINUTE), 'minute', locale === 'hk' ? '分鐘前更新' : 'minutes', locale)
+  if (delta < DAY) return countLabel(Math.floor(delta / HOUR), 'hour', locale === 'hk' ? '小時前更新' : 'hours', locale)
+  if (delta < MONTH) return countLabel(Math.floor(delta / DAY), 'day', locale === 'hk' ? '日前更新' : 'days', locale)
   return calendar(then, locale)
 }
 

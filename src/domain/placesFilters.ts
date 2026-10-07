@@ -60,14 +60,14 @@ export const PLACE_DECADES = [1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010, 20
 
 const GROUP_LABELS = {
   en: { region: 'Region', district: 'District', decade: 'Decade' },
-  'zh-hk': { region: '區域', district: '區', decade: '年代' },
+  hk: { region: '區域', district: '區', decade: '年代' },
 } as const
 
 export type PlaceFilterGroup = keyof (typeof GROUP_LABELS)['en']
 
 export function placeChipLabel(locale: SiteLocale, chip: { en: string; zh: string } | number): string {
-  if (typeof chip === 'number') return locale === 'zh-hk' ? String(chip) : `${chip}s`
-  return locale === 'zh-hk' ? chip.zh : chip.en
+  if (typeof chip === 'number') return locale === 'hk' ? String(chip) : `${chip}s`
+  return locale === 'hk' ? chip.zh : chip.en
 }
 
 export function placeFilterGroupLabel(group: PlaceFilterGroup, locale: SiteLocale): string {

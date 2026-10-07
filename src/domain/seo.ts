@@ -35,13 +35,13 @@ type SchemaThing = WithContext<LandmarksOrHistoricalBuildings | LocalBusiness | 
 
 const OG_LOCALE: Record<SiteLocale, string> = {
   en: 'en_US',
-  'zh-hk': 'zh_HK',
+  hk: 'zh_HK',
 }
 
 export function parseSeoPath(pathname: string): SeoPath | null {
   const { locale, rest } = parseLocalePath(pathname)
   const first = pathname.replace(/\/+$/, '').split('/').filter(Boolean)[0]
-  if (first !== 'en' && first !== 'zh-hk') return null
+  if (first !== 'en' && first !== 'hk') return null
   if (rest === '/') return { type: 'home', locale }
   if (rest === '/about') return { type: 'about', locale }
   const feature = parseFeaturePath(rest)
@@ -57,8 +57,8 @@ export function hreflangLinks(origin: string, rest: string): HreflangLink[] {
   const suffix = rest === '/' ? '' : rest
   return [
     { hreflang: 'en', href: `${origin}/en${suffix}` },
-    { hreflang: 'zh-Hant', href: `${origin}/zh-hk${suffix}` },
-    { hreflang: 'x-default', href: `${origin}/en${suffix}` },
+    { hreflang: 'zh-Hant', href: `${origin}/hk${suffix}` },
+    { hreflang: 'x-default', href: `${origin}/hk${suffix}` },
   ]
 }
 
@@ -70,7 +70,7 @@ export function schemaType(kind: FeatureKind): 'LandmarksOrHistoricalBuildings' 
 }
 
 export function htmlLang(locale: SiteLocale): string {
-  return locale === 'zh-hk' ? 'zh-Hant-HK' : 'en'
+  return locale === 'hk' ? 'zh-Hant-HK' : 'en'
 }
 
 export function escapeHtml(value: string): string {
@@ -86,7 +86,7 @@ export function safeJsonLd(value: unknown): string {
 }
 
 function featureName(feature: Feature, locale: SiteLocale): string {
-  if (locale === 'zh-hk') return feature.nameZh.trim() || feature.nameEn
+  if (locale === 'hk') return feature.nameZh.trim() || feature.nameEn
   return feature.nameEn.trim() || feature.nameZh
 }
 
@@ -176,7 +176,7 @@ function siteName(locale: SiteLocale): string {
 }
 
 function ogLocaleAlternate(locale: SiteLocale): string {
-  return locale === 'en' ? OG_LOCALE['zh-hk'] : OG_LOCALE.en
+  return locale === 'en' ? OG_LOCALE.hk : OG_LOCALE.en
 }
 
 export function crawlerBodyHtml(
@@ -220,7 +220,7 @@ export function crawlerBodyHtml(
   }
   const { feature, locale } = input
   const primary = featureName(feature, locale)
-  const secondary = locale === 'zh-hk' ? feature.nameEn.trim() : feature.nameZh.trim()
+  const secondary = locale === 'hk' ? feature.nameEn.trim() : feature.nameZh.trim()
   const start = isoDate(feature.start)
   const end = isoDate(feature.end)
   const district = feature.body.district?.trim()
@@ -243,11 +243,11 @@ export function crawlerBodyHtml(
 }
 
 export function featureSeoHead(feature: Feature, origin: string, locale: SiteLocale): SeoHead {
-  const rest = featurePublicPath(locale, feature.kind, feature.slug).replace(/^\/(en|zh-hk)/, '') || '/'
+  const rest = featurePublicPath(locale, feature.kind, feature.slug).replace(/^\/(en|hk)/, '') || '/'
   const name = featureName(feature, locale)
   const title = `${name} · ${copy[locale].title}`
   const fallback =
-    locale === 'zh-hk'
+    locale === 'hk'
       ? `${name} — 香港地圖集上的香港歷史地方`
       : `${name} — historical place in Hong Kong on HONG KONG ATLAS`
   const description = feature.body.notes.trim() || fallback
@@ -392,7 +392,7 @@ export function canonicalHostRedirect(requestUrl: string, publicOrigin: string):
 export function rootPathRedirect(pathname: string, publicOrigin: string): string | null {
   const path = pathname.replace(/\/+$/, '') || '/'
   if (path !== '/') return null
-  return `${publicOrigin.replace(/\/+$/, '')}/en`
+  return `${publicOrigin.replace(/\/+$/, '')}/hk`
 }
 
 export function robotsTxt(origin: string): string {
@@ -448,16 +448,16 @@ export function sitemapXml(
   const base = origin.replace(/\/+$/, '')
   const urls: string[] = []
   const pushPair = (rest: string) => {
+    const hk = `${base}/hk${rest}`
     const en = `${base}/en${rest}`
-    const zh = `${base}/zh-hk${rest}`
-    for (const loc of [en, zh]) {
+    for (const loc of [hk, en]) {
       urls.push(
         [
           '<url>',
           `<loc>${escapeHtml(loc)}</loc>`,
+          `<xhtml:link rel="alternate" hreflang="zh-Hant" href="${escapeHtml(hk)}" />`,
           `<xhtml:link rel="alternate" hreflang="en" href="${escapeHtml(en)}" />`,
-          `<xhtml:link rel="alternate" hreflang="zh-Hant" href="${escapeHtml(zh)}" />`,
-          `<xhtml:link rel="alternate" hreflang="x-default" href="${escapeHtml(en)}" />`,
+          `<xhtml:link rel="alternate" hreflang="x-default" href="${escapeHtml(hk)}" />`,
           '</url>',
         ].join(''),
       )
@@ -487,10 +487,10 @@ export function llmsTxt(origin: string): string {
     '> Spatial History Database / 空間歷史資料庫 — bilingual map of Hong Kong buildings, shops, and events over time.',
     '',
     `- English: ${base}/en`,
-    `- 繁體中文: ${base}/zh-hk`,
-    `- About: ${base}/en/about · ${base}/zh-hk/about`,
-    `- Places: ${base}/en/place/{slug} and ${base}/zh-hk/place/{slug}`,
-    `- Events: ${base}/en/event/{slug} and ${base}/zh-hk/event/{slug}`,
+    `- 繁體中文: ${base}/hk`,
+    `- About: ${base}/en/about · ${base}/hk/about`,
+    `- Places: ${base}/en/place/{slug} and ${base}/hk/place/{slug}`,
+    `- Events: ${base}/en/event/{slug} and ${base}/hk/event/{slug}`,
     `- Sitemap: ${base}/sitemap.xml`,
     '',
     'All catalog places are listed in the sitemap (English and 繁體). Wiki-enriched pages have more text.',

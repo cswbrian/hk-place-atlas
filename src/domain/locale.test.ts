@@ -12,9 +12,9 @@ import {
 } from './locale'
 
 describe('parseLocalePath', () => {
-  it('reads /en and /zh-hk map roots', () => {
+  it('reads /en and /hk map roots', () => {
     expect(parseLocalePath('/en')).toEqual({ locale: 'en', rest: '/' })
-    expect(parseLocalePath('/zh-hk')).toEqual({ locale: 'zh-hk', rest: '/' })
+    expect(parseLocalePath('/hk')).toEqual({ locale: 'hk', rest: '/' })
   })
 
   it('keeps a place slug under the locale prefix', () => {
@@ -24,15 +24,15 @@ describe('parseLocalePath', () => {
     })
   })
 
-  it('defaults a bare path to English', () => {
-    expect(parseLocalePath('/')).toEqual({ locale: 'en', rest: '/' })
+  it('defaults a bare path to hk', () => {
+    expect(parseLocalePath('/')).toEqual({ locale: 'hk', rest: '/' })
   })
 })
 
 describe('switchLocalePath', () => {
   it('swaps only the locale prefix', () => {
-    expect(switchLocalePath('/en/place/foo-1970', 'zh-hk')).toBe('/zh-hk/place/foo-1970')
-    expect(switchLocalePath('/en/places/foo', 'zh-hk')).toBe('/zh-hk/places/foo')
+    expect(switchLocalePath('/en/place/foo-1970', 'hk')).toBe('/hk/place/foo-1970')
+    expect(switchLocalePath('/en/places/foo', 'hk')).toBe('/hk/places/foo')
   })
 })
 
@@ -48,9 +48,9 @@ describe('parsePlacesPath', () => {
 describe('placesPageRedirect', () => {
   it('sends the directory home to the map and a selected slug to the place page', () => {
     expect(placesPageRedirect('/en/places')).toBe('/en')
-    expect(placesPageRedirect('/zh-hk/places')).toBe('/zh-hk')
+    expect(placesPageRedirect('/hk/places')).toBe('/hk')
     expect(placesPageRedirect('/en/places/jardine-house-1973')).toBe('/en/place/jardine-house-1973')
-    expect(placesPageRedirect('/zh-hk/places/jardine-house-1973')).toBe('/zh-hk/place/jardine-house-1973')
+    expect(placesPageRedirect('/hk/places/jardine-house-1973')).toBe('/hk/place/jardine-house-1973')
     expect(placesPageRedirect('/en/place/jardine-house-1973')).toBeNull()
     expect(placesPageRedirect('/en')).toBeNull()
   })
@@ -67,14 +67,14 @@ describe('parseFeaturePath', () => {
 describe('featurePublicPath', () => {
   it('puts occupancy kinds under /place and events under /event', () => {
     expect(featurePublicPath('en', 'establishment', 'foo-1970')).toBe('/en/place/foo-1970')
-    expect(featurePublicPath('zh-hk', 'shop', 'bar')).toBe('/zh-hk/place/bar')
+    expect(featurePublicPath('hk', 'shop', 'bar')).toBe('/hk/place/bar')
     expect(featurePublicPath('en', 'event', 'typhoon')).toBe('/en/event/typhoon')
   })
 })
 
 describe('displayNames', () => {
-  it('leads with Chinese on the zh-hk site', () => {
-    expect(displayNames({ nameEn: 'Bonham Towers', nameZh: '般含閣' }, 'zh-hk')).toEqual({
+  it('leads with Chinese on the hk site', () => {
+    expect(displayNames({ nameEn: 'Bonham Towers', nameZh: '般含閣' }, 'hk')).toEqual({
       title: '般含閣',
       secondary: 'Bonham Towers',
     })
@@ -85,7 +85,7 @@ describe('catalogCountLine', () => {
   it('states how many places and photos are in the atlas', () => {
     expect(catalogCountLine(12, 3, 'en')).toBe('12 places, 3 photos, and growing.')
     expect(catalogCountLine(1, 1, 'en')).toBe('1 place, 1 photo, and growing.')
-    expect(catalogCountLine(12, 3, 'zh-hk')).toBe('12 個地點，3 張相片，共同記錄')
+    expect(catalogCountLine(12, 3, 'hk')).toBe('12 個地點，3 張相片，共同記錄')
   })
 })
 
@@ -93,7 +93,7 @@ describe('delete confirm copy', () => {
   it('asks before deleting a place or tag in both locales', () => {
     expect(copy.en.deletePlaceConfirm).toBe('Delete this place?')
     expect(copy.en.removeTagConfirm).toBe('Remove this tag?')
-    expect(copy['zh-hk'].deletePlaceConfirm).toBe('刪除此地？')
-    expect(copy['zh-hk'].removeTagConfirm).toBe('移除此標記？')
+    expect(copy.hk.deletePlaceConfirm).toBe('刪除此地？')
+    expect(copy.hk.removeTagConfirm).toBe('移除此標記？')
   })
 })
