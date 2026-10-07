@@ -240,8 +240,10 @@ function AtlasApp() {
         ? text.aboutSeoTitle
         : selected
           ? `${displayNames(selected, locale).title} · ${text.title}`
-          : text.title
-  }, [path, locale, rest, text.title, text.aboutSeoTitle, selected, search])
+          : rest === '/'
+            ? text.seoTitle
+            : text.title
+  }, [path, locale, rest, text.title, text.seoTitle, text.aboutSeoTitle, selected, search])
 
   useEffect(() => {
     const onPop = () => {
