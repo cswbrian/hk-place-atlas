@@ -16,7 +16,7 @@ export type PlacesPath = { slug: string | null }
 
 export const copy = {
   en: {
-    title: 'HK Atlas',
+    title: 'HONG KONG ATLAS',
     tagline: 'Hong Kong buildings, shops, and events over time',
     thisSite: 'This site',
     close: 'Close',

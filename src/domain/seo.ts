@@ -401,7 +401,7 @@ export function sitemapXml(
 export function llmsTxt(origin: string): string {
   const base = origin.replace(/\/+$/, '')
   return [
-    '# HK Atlas · 香港地圖集',
+    '# HONG KONG ATLAS · 香港地圖集',
     '',
     '> Bilingual map of Hong Kong buildings, shops, and events over time.',
     '',

@@ -123,7 +123,7 @@ describe('homeJsonLd', () => {
   it('describes a bilingual Hong Kong places website', () => {
     expect(homeJsonLd('https://hkatlas.fyi', 'en')).toMatchObject({
       '@type': 'WebSite',
-      name: 'HK Atlas',
+      name: 'HONG KONG ATLAS',
       url: 'https://hkatlas.fyi/en',
       inLanguage: ['en', 'zh-Hant-HK'],
       about: { '@type': 'Place', name: 'Hong Kong', address: { addressCountry: 'HK' } },
@@ -139,9 +139,9 @@ describe('homeJsonLd', () => {
 describe('homeSeoHead', () => {
   it('matches the locale h1 in title, site name, and crawler body', () => {
     const en = homeSeoHead('https://hkatlas.fyi', 'en')
-    expect(en.title).toBe('HK Atlas')
-    expect(en.siteName).toBe('HK Atlas')
-    expect(en.crawlerBody).toContain('<h1>HK Atlas</h1>')
+    expect(en.title).toBe('HONG KONG ATLAS')
+    expect(en.siteName).toBe('HONG KONG ATLAS')
+    expect(en.crawlerBody).toContain('<h1>HONG KONG ATLAS</h1>')
 
     const zh = homeSeoHead('https://hkatlas.fyi', 'zh-hk')
     expect(zh.title).toBe('香港地圖集')
@@ -153,8 +153,8 @@ describe('homeSeoHead', () => {
 describe('featureSeoHead', () => {
   it('suffixes the locale h1 title and uses it as og:site_name', () => {
     const en = featureSeoHead(stub, 'https://hkatlas.fyi', 'en')
-    expect(en.title).toBe('HIGH HOUSE · HK Atlas')
-    expect(en.siteName).toBe('HK Atlas')
+    expect(en.title).toBe('HIGH HOUSE · HONG KONG ATLAS')
+    expect(en.siteName).toBe('HONG KONG ATLAS')
 
     const zh = featureSeoHead(stub, 'https://hkatlas.fyi', 'zh-hk')
     expect(zh.title).toBe('金高大廈 · 香港地圖集')
@@ -271,7 +271,7 @@ describe('sitemapPageCount', () => {
 describe('llmsTxt', () => {
   it('summarizes the atlas for AI crawlers', () => {
     const body = llmsTxt('https://hkatlas.fyi')
-    expect(body).toContain('HK Atlas · 香港地圖集')
+    expect(body).toContain('HONG KONG ATLAS · 香港地圖集')
     expect(body).toContain('https://hkatlas.fyi/en')
     expect(body).not.toContain('/places')
     expect(body).toContain('/place/{slug}')
