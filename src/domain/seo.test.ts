@@ -152,7 +152,7 @@ describe('homeSeoHead', () => {
     expect(en.description).toMatch(/Spatial history database/i)
     expect(en.siteName).toBe('HONG KONG ATLAS')
     expect(en.crawlerBody).toContain('<h1>HONG KONG ATLAS</h1>')
-    expect(en.crawlerBody).toMatch(/spatial history database/i)
+    expect(en.crawlerBody).toMatch(/community-built urban history map directory/i)
     expect(en.crawlerBody).toContain('/en/about')
     expect(en.ogImage).toBe('https://hkatlas.fyi/og.png')
 
@@ -161,7 +161,7 @@ describe('homeSeoHead', () => {
     expect(zh.description).toContain('空間歷史資料庫')
     expect(zh.siteName).toBe('香港地圖集')
     expect(zh.crawlerBody).toContain('<h1>香港地圖集</h1>')
-    expect(zh.crawlerBody).toContain('空間歷史資料庫')
+    expect(zh.crawlerBody).toContain('社群協作的城市歷史地圖目錄')
     expect(zh.crawlerBody).toContain('/zh-hk/about')
   })
 })
@@ -176,13 +176,15 @@ describe('aboutSeoHead', () => {
       '@type': 'AboutPage',
       url: 'https://hkatlas.fyi/en/about',
     })
-    expect(en.crawlerBody).toMatch(/spatial history database/i)
+    expect(en.crawlerBody).toMatch(/community-built urban history map directory/i)
+    expect(en.crawlerBody).toContain('You can:')
     expect(en.crawlerBody).toContain('Back to map')
 
     const zh = aboutSeoHead('https://hkatlas.fyi', 'zh-hk')
     expect(zh.title).toBe('關於香港地圖集 — 歷史地圖')
     expect(zh.canonical).toBe('https://hkatlas.fyi/zh-hk/about')
-    expect(zh.crawlerBody).toContain('空間歷史資料庫')
+    expect(zh.crawlerBody).toContain('社群協作的城市歷史地圖目錄')
+    expect(zh.crawlerBody).toContain('你可以：')
   })
 })
 
@@ -331,9 +333,9 @@ describe('llmsTxt', () => {
 })
 
 describe('crawlerBodyHtml', () => {
-  it('frames the home page as a spatial history database', () => {
+  it('frames the home page with community about copy', () => {
     const en = crawlerBodyHtml({ type: 'home', locale: 'en' })
-    expect(en).toMatch(/spatial history database/i)
+    expect(en).toMatch(/community-built urban history map directory/i)
     expect(en).toContain('href="/en/about"')
   })
 

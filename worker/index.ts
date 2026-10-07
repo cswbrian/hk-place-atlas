@@ -629,6 +629,15 @@ async function handleRecent(env: Env): Promise<Response> {
   return json({ features: (results ?? []).map(recentItemFromRow) })
 }
 
+async function handleCounts(env: Env): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM features) AS places,
+       (SELECT COUNT(*) FROM photos) AS photos`,
+  ).first<{ places: number; photos: number }>()
+  return json({ places: row?.places ?? 0, photos: row?.photos ?? 0 })
+}
+
 function hk80FromWgs(bbox: Bbox): [number, number, number, number] {
   const [minX, minY] = wgsToHk80(bbox.west, bbox.south)
   const [maxX, maxY] = wgsToHk80(bbox.east, bbox.north)
@@ -1147,6 +1156,9 @@ export default {
     }
     if (route.type === 'recent' && request.method === 'GET') {
       return cachedRead(request, ctx, route, () => handleRecent(env))
+    }
+    if (route.type === 'counts' && request.method === 'GET') {
+      return cachedRead(request, ctx, route, () => handleCounts(env))
     }
     if (route.type === 'audit' && request.method === 'GET') return handleAuditList(env, route.featureId)
     if (route.type === 'auditRevert' && request.method === 'POST') return handleAuditRevert(request, env, route.id)

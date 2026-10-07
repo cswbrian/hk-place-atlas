@@ -1,5 +1,5 @@
 import { featureAsEstablishment, type Feature, type FeatureKind } from '../domain/feature'
-import { copy, displayNames, type SiteLocale } from '../domain/locale'
+import { catalogCountLine, copy, displayNames, type SiteLocale } from '../domain/locale'
 import { updatedAgo, yearSpan, type RecentItem } from '../domain/recent'
 import type { SiteQueryResult } from '../domain/querySite'
 import { EstablishmentDetail } from './EstablishmentDetail'
@@ -22,6 +22,7 @@ type Props = {
   onShowHistory?: () => void
   onRevert?: (id: string) => void
   photos?: ReactNode
+  counts?: { places: number; photos: number } | null
 }
 
 export function FeaturePanel({
@@ -39,6 +40,7 @@ export function FeaturePanel({
   onShowHistory,
   onRevert,
   photos,
+  counts = null,
 }: Props) {
   const text = copy[locale]
   const establishments = features.map(featureAsEstablishment)
@@ -137,8 +139,7 @@ export function FeaturePanel({
 
   return (
     <div className="welcome">
-      <h2>{text.title}</h2>
-      <p>{text.tagline}</p>
+      {counts ? <p>{catalogCountLine(counts.places, counts.photos, locale)}</p> : null}
       <p className="hint">{text.hint}</p>
       {recent.length > 0 ? (
         <section aria-label={text.recent}>

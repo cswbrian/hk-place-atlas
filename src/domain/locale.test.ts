@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  catalogCountLine,
   copy,
   displayNames,
   featurePublicPath,
-  defaultPlaceRedirect,
   parseFeaturePath,
   parseLocalePath,
   parsePlacesPath,
@@ -45,16 +45,6 @@ describe('parsePlacesPath', () => {
   })
 })
 
-describe('defaultPlaceRedirect', () => {
-  it('opens the map root on the P&O Building and leaves place pages alone', () => {
-    expect(defaultPlaceRedirect('/')).toBe('/en/place/po-building-second-generation-1966')
-    expect(defaultPlaceRedirect('/en')).toBe('/en/place/po-building-second-generation-1966')
-    expect(defaultPlaceRedirect('/zh-hk')).toBe('/zh-hk/place/po-building-second-generation-1966')
-    expect(defaultPlaceRedirect('/en/place/jardine-house-1973')).toBeNull()
-    expect(defaultPlaceRedirect('/en/places')).toBeNull()
-  })
-})
-
 describe('placesPageRedirect', () => {
   it('sends the directory home to the map and a selected slug to the place page', () => {
     expect(placesPageRedirect('/en/places')).toBe('/en')
@@ -88,6 +78,14 @@ describe('displayNames', () => {
       title: '般含閣',
       secondary: 'Bonham Towers',
     })
+  })
+})
+
+describe('catalogCountLine', () => {
+  it('states how many places and photos are in the atlas', () => {
+    expect(catalogCountLine(12, 3, 'en')).toBe('12 places, 3 photos, and growing.')
+    expect(catalogCountLine(1, 1, 'en')).toBe('1 place, 1 photo, and growing.')
+    expect(catalogCountLine(12, 3, 'zh-hk')).toBe('12 個地點，3 張相片，共同記錄')
   })
 })
 

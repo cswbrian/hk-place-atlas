@@ -20,11 +20,13 @@ export type ApiRoute =
   | { type: 'photoFile'; id: string }
   | { type: 'photoTags'; id: string }
   | { type: 'photoTag'; id: string; tagId: string }
+  | { type: 'counts' }
 
 export function parseApiRoute(url: URL): ApiRoute | null {
   const path = url.pathname.replace(/\/$/, '') || '/'
   if (path === '/api/features') return { type: 'list' }
   if (path === '/api/recent') return { type: 'recent' }
+  if (path === '/api/counts') return { type: 'counts' }
   const feature = /^\/api\/features\/([^/]+)$/.exec(path)
   if (feature) return { type: 'feature', slug: decodeURIComponent(feature[1]!) }
   if (path === '/api/edges') {

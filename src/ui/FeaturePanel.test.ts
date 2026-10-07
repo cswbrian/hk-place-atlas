@@ -36,6 +36,40 @@ const place: Feature = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+describe('FeaturePanel welcome counts', () => {
+  it('replaces the tagline with a live place and photo count', () => {
+    const html = renderToStaticMarkup(
+      createElement(FeaturePanel, {
+        locale: 'en',
+        site: null,
+        features: [],
+        selected: null,
+        edges: [],
+        onSelectSlug: () => {},
+        counts: { places: 12, photos: 3 },
+      }),
+    )
+    expect(html).toContain('12 places, 3 photos, and growing.')
+    expect(html).not.toContain('Community-driven directory mapping local history.')
+  })
+
+  it('uses the Chinese count line on the zh-hk site', () => {
+    const html = renderToStaticMarkup(
+      createElement(FeaturePanel, {
+        locale: 'zh-hk',
+        site: null,
+        features: [],
+        selected: null,
+        edges: [],
+        onSelectSlug: () => {},
+        counts: { places: 12, photos: 3 },
+      }),
+    )
+    expect(html).toContain('12 個地點，3 張相片，共同記錄')
+    expect(html).not.toContain('社群協作的城市歷史地圖目錄')
+  })
+})
+
 describe('FeaturePanel site photos', () => {
   it('renders the photos slot under the site panel', () => {
     const html = renderToStaticMarkup(

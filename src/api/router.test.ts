@@ -30,6 +30,10 @@ describe('parseApiRoute', () => {
     expect(parseApiRoute(new URL('https://x/api/recent'))).toEqual({ type: 'recent' })
   })
 
+  it('matches the catalog counts', () => {
+    expect(parseApiRoute(new URL('https://x/api/counts'))).toEqual({ type: 'counts' })
+  })
+
   it('matches wiki and auth routes', () => {
     expect(parseApiRoute(new URL('https://x/api/me'))).toEqual({ type: 'me' })
     expect(parseApiRoute(new URL('https://x/api/auth/google'))).toEqual({ type: 'authGoogle' })

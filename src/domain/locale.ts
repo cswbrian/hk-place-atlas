@@ -17,26 +17,28 @@ export type PlacesPath = { slug: string | null }
 export const copy = {
   en: {
     title: 'HONG KONG ATLAS',
-    tagline: 'Hong Kong buildings, shops, and events over time',
+    tagline: 'Community-driven directory mapping local history.',
     seoTitle: 'HONG KONG ATLAS — Hong Kong history map of places',
     seoDescription:
       'Spatial history database — an interactive map of Hong Kong’s historical places: buildings, shops, and events over time.',
     category: 'Spatial History Database',
     aboutNav: 'About',
+    menu: 'Menu',
     aboutHeading: 'About HONG KONG ATLAS',
-    aboutLead:
-      'HONG KONG ATLAS is a spatial history database of Hong Kong places — buildings, shops, and events — on an interactive map over time.',
+    aboutLead: 'We are a community-built urban history map directory.',
+    aboutBody:
+      'We gather scattered old photos, historical archives, and maps, and archive them by real geographic coordinates. Anyone can browse, and anyone can help complete this map.',
+    aboutCan: 'You can:',
     aboutBullets: [
-      'Browse clustered places on the map; open a pin for names, dates, notes, and sources.',
-      'English and 繁體中文; standing and demolished places alike.',
-      'Sign in to add places, photos, and edits.',
+      'Look up a building’s location, historical background, and old photo records.',
+      'Submit coordinates for unlisted former sites, boundary stones, air-raid shelters, and other physical places.',
+      'Correct year or location errors in existing entries.',
     ],
-    aboutDiffers:
-      'Unlike historical paper-map overlays or archive portals, HONG KONG ATLAS is a structured place record you can explore and improve.',
     aboutBack: 'Back to map',
+    aboutSignIn: 'Sign in to edit',
     aboutSeoTitle: 'About HONG KONG ATLAS — Hong Kong history map',
     aboutSeoDescription:
-      'About HONG KONG ATLAS, a spatial history database and interactive map of Hong Kong’s historical places.',
+      'About HONG KONG ATLAS, a community-built urban history map directory where anyone can browse and contribute.',
     thisSite: 'This site',
     close: 'Close',
     emptySite: 'Nothing recorded here yet.',
@@ -139,24 +141,26 @@ export const copy = {
   },
   'zh-hk': {
     title: '香港地圖集',
-    tagline: '香港樓宇、店舖與事件的時間地圖',
+    tagline: '社群協作的城市歷史地圖目錄',
     seoTitle: '香港地圖集 — 歷史地圖',
     seoDescription: '空間歷史資料庫 — 香港歷史地方互動地圖，涵蓋樓宇、店舖與事件。',
     category: '空間歷史資料庫',
     aboutNav: '關於',
+    menu: '選單',
     aboutHeading: '關於香港地圖集',
-    aboutLead:
-      '香港地圖集是一個空間歷史資料庫，以互動地圖記錄香港地方——樓宇、店舖與事件——隨時間演變。',
+    aboutLead: '我們是由社群協作的城市歷史地圖目錄。',
+    aboutBody:
+      '此地圖集將分散於各處的舊相片與歷史檔案，按地理座標整理。歡迎查閱及協助補全。',
+    aboutCan: '你可以：',
     aboutBullets: [
-      '在地圖上瀏覽聚類地點；點選標記查看名稱、年份、備註與來源。',
-      '支援英文與繁體中文；包括現存與已拆卸的地方。',
-      '登入後可新增地方、照片與編輯。',
+      '查閱特定建築物的地理位置、歷史背景及舊相片紀錄。',
+      '提交尚未收錄的舊址、界石或防空洞等實體坐標。',
+      '勘誤現存條目中的年份或定位偏差。',
     ],
-    aboutDiffers:
-      '有別於舊地圖疊加或檔案庫入口，香港地圖集是可供探索與協作的結構化地方紀錄。',
     aboutBack: '返回地圖',
+    aboutSignIn: '登入以編輯',
     aboutSeoTitle: '關於香港地圖集 — 歷史地圖',
-    aboutSeoDescription: '關於香港地圖集：空間歷史資料庫，香港歷史地方的互動地圖。',
+    aboutSeoDescription: '關於香港地圖集：由社群協作的城市歷史地圖目錄，任何人都可以查閱與補全。',
     thisSite: '此地',
     close: '關閉',
     emptySite: '此地尚未有紀錄。',
@@ -294,15 +298,6 @@ export function parsePlacesPath(rest: string): PlacesPath | null {
   return { slug: decodeURIComponent(match[1]!) }
 }
 
-export const DEFAULT_PLACE_SLUG = 'po-building-second-generation-1966'
-
-/** Map roots open on the P&O Building. Other paths stay put. */
-export function defaultPlaceRedirect(pathname: string): string | null {
-  const { locale, rest } = parseLocalePath(pathname)
-  if (rest !== '/') return null
-  return featurePublicPath(locale, 'establishment', DEFAULT_PLACE_SLUG)
-}
-
 export function placesPageRedirect(pathname: string): string | null {
   const { locale, rest } = parseLocalePath(pathname)
   const places = parsePlacesPath(rest)
@@ -314,6 +309,13 @@ export function placesPageRedirect(pathname: string): string | null {
 export function featurePublicPath(locale: SiteLocale, kind: FeatureKind, slug: string): string {
   const group = kind === 'event' ? 'event' : 'place'
   return `/${locale}/${group}/${slug}`
+}
+
+export function catalogCountLine(places: number, photos: number, locale: SiteLocale): string {
+  if (locale === 'zh-hk') return `${places} 個地點，${photos} 張相片，共同記錄`
+  const placeWord = places === 1 ? 'place' : 'places'
+  const photoWord = photos === 1 ? 'photo' : 'photos'
+  return `${places} ${placeWord}, ${photos} ${photoWord}, and growing.`
 }
 
 export function displayNames(

@@ -24,6 +24,12 @@ export async function fetchFeatureBySlug(slug: string): Promise<Feature | null> 
   return (await response.json()) as Feature
 }
 
+export async function fetchCounts(): Promise<{ places: number; photos: number }> {
+  const response = await fetch('/api/counts')
+  if (!response.ok) throw new Error('Could not load counts')
+  return (await response.json()) as { places: number; photos: number }
+}
+
 export async function fetchRecent(): Promise<RecentItem[]> {
   const response = await fetch('/api/recent')
   if (!response.ok) throw new Error('Could not load recent updates')

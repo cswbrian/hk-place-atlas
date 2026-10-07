@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   deleteFeature,
   fetchAudit,
+  fetchCounts,
   fetchEdges,
   fetchFeatureBySlug,
   fetchFeaturesInBbox,
@@ -24,7 +25,6 @@ import { featureAsEstablishment, type Feature } from './domain/feature'
 import { featureInBbox, type Bbox } from './domain/featureQuery'
 import {
   copy,
-  defaultPlaceRedirect,
   displayNames,
   featurePublicPath,
   parseFeaturePath,
@@ -108,11 +108,14 @@ function AtlasApp() {
   const [formError, setFormError] = useState<string | null>(null)
   const [pinForm, setPinForm] = useState(false)
   const [signInIntent, setSignInIntent] = useState<SignInPromptIntent | null>(null)
+  const [navOpen, setNavOpen] = useState(false)
+  const navRef = useRef<HTMLDivElement>(null)
   const [photoRequestPick, setPhotoRequestPick] = useState(false)
   const pinCommit = useRef<((featureId: string) => Promise<void>) | null>(null)
   const [mapRegion, setMapRegion] = useState<string | null>(null)
   const [mapDistrict, setMapDistrict] = useState<string | null>(null)
   const [recent, setRecent] = useState<RecentItem[]>([])
+  const [counts, setCounts] = useState<{ places: number; photos: number } | null>(null)
   const [mapPhotos, setMapPhotos] = useState<PhotoPin[]>([])
   const siteRef = useRef<SiteQueryResult | null>(null)
   const bboxRef = useRef<Bbox | null>(null)
@@ -164,6 +167,7 @@ function AtlasApp() {
     const url = new URL(next, window.location.origin)
     setPath(url.pathname)
     setSearch(url.search)
+    setNavOpen(false)
   }, [])
 
   const signInHrefFor = useCallback(
@@ -196,6 +200,22 @@ function AtlasApp() {
   )
 
   useEffect(() => {
+    if (!navOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNavOpen(false)
+    }
+    const onPointer = (event: PointerEvent) => {
+      if (!navRef.current?.contains(event.target as Node)) setNavOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointer)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer)
+    }
+  }, [navOpen])
+
+  useEffect(() => {
     const intent = parseAuthIntent(search)
     if (!user || !intent) return
     if ((intent === 'edit' || intent === 'photo') && !selected) return
@@ -209,7 +229,6 @@ function AtlasApp() {
     else if (intent === 'photo') setPhotoRequestPick(true)
   }, [user, selected, search, path, startAdd, startEdit])
 
-  const openedDefaultPlace = useRef(false)
   useEffect(() => {
     const redirected = placesPageRedirect(path)
     if (redirected) {
@@ -217,15 +236,6 @@ function AtlasApp() {
       setPath(redirected)
       setSearch('')
       return
-    }
-    if (!openedDefaultPlace.current) {
-      const place = defaultPlaceRedirect(path)
-      if (place) {
-        window.history.replaceState({}, '', `${place}${search}`)
-        setPath(place)
-        return
-      }
-      openedDefaultPlace.current = true
     }
     const next = canonicalPath(locale, rest)
     const nextWithSearch = `${next}${search}`
@@ -278,6 +288,20 @@ function AtlasApp() {
         setUser(null)
         setAuth(false)
       })
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchCounts()
+      .then((next) => {
+        if (!cancelled) setCounts(next)
+      })
+      .catch(() => {
+        if (!cancelled) setCounts(null)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -451,48 +475,89 @@ function AtlasApp() {
       )}
       <header className="chrome">
         <div className="chrome-brand">
-          <h1>{text.title}</h1>
-        </div>
-        <div className="chrome-actions">
           <a
-            href={`/${locale}/about`}
-            className="chrome-about"
-            aria-current={rest === '/about' ? 'page' : undefined}
+            href={`/${locale}`}
+            className="chrome-home"
             onClick={(event) => {
               event.preventDefault()
-              go(`/${locale}/about`)
+              if (draft) {
+                pinCommit.current = null
+                setPinForm(false)
+                setDraft(null)
+                setCreating(false)
+                setFormError(null)
+              }
+              closePanel()
             }}
           >
-            {text.aboutNav}
+            <h1>{text.title}</h1>
           </a>
-          <nav className="lang-switch" aria-label="Language">
+        </div>
+        <div className="chrome-end" ref={navRef}>
+          <button
+            type="button"
+            className="chrome-menu-toggle"
+            aria-expanded={navOpen}
+            aria-controls="chrome-nav"
+            aria-label={navOpen ? text.close : text.menu}
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            <span className="chrome-menu-icon" aria-hidden="true" />
+          </button>
+          <div className={`chrome-actions${navOpen ? ' is-open' : ''}`} id="chrome-nav">
             <a
-              href={`${switchLocalePath(path, otherLocale)}${search}`}
-              hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
-              lang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
+              href={`/${locale}/about`}
+              className="chrome-about"
+              aria-current={rest === '/about' ? 'page' : undefined}
               onClick={(event) => {
                 event.preventDefault()
-                go(`${switchLocalePath(path, otherLocale)}${search}`)
+                go(`/${locale}/about`)
               }}
             >
-              {text.otherLanguage}
+              {text.aboutNav}
             </a>
-            {auth && !user ? (
-              <button type="button" className="linkish" onClick={() => setSignInIntent('contribute')}>
-                {text.signIn}
-              </button>
-            ) : null}
-            {user ? (
-              <span className="atlas-user">
-                {user.email}
-                <a href={`/api/auth/logout?return=${encodeURIComponent(path + search)}`}>{text.signOut}</a>
-              </span>
-            ) : null}
-          </nav>
+            <nav className="lang-switch" aria-label="Language">
+              <a
+                href={`${switchLocalePath(path, otherLocale)}${search}`}
+                hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
+                lang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
+                onClick={(event) => {
+                  event.preventDefault()
+                  go(`${switchLocalePath(path, otherLocale)}${search}`)
+                }}
+              >
+                {text.otherLanguage}
+              </a>
+              {auth && !user ? (
+                <button
+                  type="button"
+                  className="linkish"
+                  onClick={() => {
+                    setNavOpen(false)
+                    setSignInIntent('contribute')
+                  }}
+                >
+                  {text.signIn}
+                </button>
+              ) : null}
+              {user ? (
+                <span className="atlas-user">
+                  {user.email}
+                  <a href={`/api/auth/logout?return=${encodeURIComponent(path + search)}`}>{text.signOut}</a>
+                </span>
+              ) : null}
+            </nav>
+          </div>
         </div>
       </header>
       {rest === '/about' ? (
-        <AboutPage locale={locale} onBack={() => go(`/${locale}`)} />
+        <AboutPage
+          locale={locale}
+          signedIn={Boolean(user)}
+          authEnabled={Boolean(auth)}
+          onBack={() => go(`/${locale}`)}
+          onSignIn={() => setSignInIntent('edit')}
+        />
       ) : (
         <>
           <div className="workspace">
@@ -590,6 +655,7 @@ function AtlasApp() {
                   selected={selected}
                   edges={edges}
                   recent={recent}
+                  counts={counts}
                   onSelectSlug={selectSlug}
                   onBack={
                     site

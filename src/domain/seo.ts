@@ -207,8 +207,9 @@ export function crawlerBodyHtml(
       `<main>`,
       `<h1>${escapeHtml(text.aboutHeading)}</h1>`,
       `<p>${escapeHtml(text.aboutLead)}</p>`,
+      `<p>${escapeHtml(text.aboutBody)}</p>`,
+      `<p>${escapeHtml(text.aboutCan)}</p>`,
       `<ul>${bullets}</ul>`,
-      `<p>${escapeHtml(text.aboutDiffers)}</p>`,
       `<p><a href="${escapeHtml(mapHref)}">${escapeHtml(text.aboutBack)}</a></p>`,
       `</main>`,
     ].join('')

@@ -14,14 +14,14 @@ import type { CatalogGeojson } from '../domain/catalog'
 import type { Bbox } from '../domain/featureQuery'
 import { mapThumbs, thumbPath, type PhotoPin } from '../domain/photo'
 import type { BuildingSnapshot, LotSnapshot } from '../domain/types'
-import { OPENFREEMAP_ATTRIBUTION, OPENFREEMAP_BRIGHT_STYLE } from './basemap'
+import { LANDSD_ATTRIBUTION, LANDSD_STYLE_URL, landsDepartmentMapStyle } from './basemap'
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
 
 setWorkerUrl(workerUrl)
 
 const CITY: [number, number] = [114.1694, 22.3193]
-/** P&O Building (5th Generation). The atlas opens framed on this site. */
-const DEFAULT_CENTER: [number, number] = [114.1575872, 22.28280603]
+/** Pedder Street × Des Voeux Road Central. The atlas opens framed on this junction. */
+const DEFAULT_CENTER: [number, number] = [114.1578283, 22.2820331]
 const EMPTY: CatalogGeojson = { type: 'FeatureCollection', features: [] }
 const GIS_ZOOM = 17
 
@@ -96,15 +96,19 @@ export function AtlasMap({
     if (!root.current) return
     const map = new MapLibreMap({
       container: root.current,
-      style: OPENFREEMAP_BRIGHT_STYLE,
+      style: { version: 8, sources: {}, layers: [] },
       center: DEFAULT_CENTER,
       zoom: GIS_ZOOM,
       minZoom: 9,
       maxZoom: 19,
       attributionControl: false,
     })
+    map.setStyle(LANDSD_STYLE_URL, {
+      diff: false,
+      transformStyle: (_previous, next) => landsDepartmentMapStyle(next),
+    })
     map.addControl(
-      new AttributionControl({ compact: true, customAttribution: `${OPENFREEMAP_ATTRIBUTION} · CSDI · LandsD` }),
+      new AttributionControl({ compact: true, customAttribution: `${LANDSD_ATTRIBUTION} · CSDI` }),
     )
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
     mapRef.current = map
@@ -148,7 +152,8 @@ export function AtlasMap({
     }
     paintPhotosRef.current = paintPhotos
 
-    map.on('load', () => {
+    map.on('style.load', () => {
+      if (!map.getSource('esri') || map.getSource('catalog')) return
       map.addSource('gis-lots', {
         type: 'geojson',
         data: polygonCollection(lotsRef.current, (lot) => lot.number),
@@ -209,7 +214,7 @@ export function AtlasMap({
         layout: {
           'text-field': ['get', 'point_count_abbreviated'],
           'text-size': 12,
-          'text-font': ['Noto Sans Regular'],
+          'text-font': ['Arial Regular'],
         },
         paint: { 'text-color': '#ffffff' },
       })
@@ -291,10 +296,13 @@ export function AtlasMap({
     const reset = () => {
       map.getCanvas().style.cursor = ''
     }
-    map.on('moveend', () => {
+    const reportView = () => {
       onViewRef.current(bboxOf(map), map.getZoom())
       void paintPhotos()
-    })
+    }
+    map.on('load', reportView)
+    map.on('moveend', reportView)
+    if (map.loaded()) reportView()
     map.on('mouseenter', 'clusters', pointer)
     map.on('mouseenter', 'unclustered', pointer)
     map.on('mouseenter', 'gis-buildings-fill', pointer)
