@@ -1328,10 +1328,6 @@ button.photo-delete:hover {
     padding: 4px 8px 4px 16px;
   }
 
-  .chrome h1 {
-    font-size: 15px;
-  }
-
   .chrome-menu-toggle {
     display: inline-flex;
     flex-shrink: 0;
