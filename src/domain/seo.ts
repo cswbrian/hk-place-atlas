@@ -4,7 +4,8 @@ import type { Feature, FeatureKind } from './feature'
 
 export type SeoHome = { type: 'home'; locale: SiteLocale }
 export type SeoFeature = { type: 'feature'; locale: SiteLocale; group: 'place' | 'event'; slug: string }
-export type SeoPath = SeoHome | SeoFeature
+export type SeoAbout = { type: 'about'; locale: SiteLocale }
+export type SeoPath = SeoHome | SeoFeature | SeoAbout
 
 export type HreflangLink = { hreflang: string; href: string }
 
@@ -37,6 +38,7 @@ export function parseSeoPath(pathname: string): SeoPath | null {
   const first = pathname.replace(/\/+$/, '').split('/').filter(Boolean)[0]
   if (first !== 'en' && first !== 'zh-hk') return null
   if (rest === '/') return { type: 'home', locale }
+  if (rest === '/about') return { type: 'about', locale }
   const feature = parseFeaturePath(rest)
   if (!feature) return null
   return { type: 'feature', locale, group: feature.group, slug: feature.slug }
@@ -147,6 +149,23 @@ export function homeJsonLd(origin: string, locale: SiteLocale) {
   }
 }
 
+export function aboutJsonLd(origin: string, locale: SiteLocale) {
+  const text = copy[locale]
+  return {
+    '@context': 'https://schema.org' as const,
+    '@type': 'AboutPage' as const,
+    name: text.aboutSeoTitle,
+    description: text.aboutSeoDescription,
+    url: `${origin}/${locale}/about`,
+    inLanguage: htmlLang(locale),
+    isPartOf: { '@type': 'WebSite' as const, name: text.title, url: `${origin}/${locale}` },
+    about: {
+      '@type': 'Thing' as const,
+      name: text.category,
+    },
+  }
+}
+
 function siteName(locale: SiteLocale): string {
   return copy[locale].title
 }
@@ -158,6 +177,7 @@ function ogLocaleAlternate(locale: SiteLocale): string {
 export function crawlerBodyHtml(
   input:
     | { type: 'home'; locale: SiteLocale }
+    | { type: 'about'; locale: SiteLocale }
     | { type: 'feature'; feature: Feature; locale: SiteLocale }
     | { type: 'notFound'; locale: SiteLocale },
 ): string {
@@ -171,6 +191,20 @@ export function crawlerBodyHtml(
       `<p>${escapeHtml(text.aboutLead)}</p>`,
       `<ul>${bullets}</ul>`,
       `<p><a href="${escapeHtml(aboutHref)}">${escapeHtml(text.aboutNav)}</a></p>`,
+      `</main>`,
+    ].join('')
+  }
+  if (input.type === 'about') {
+    const text = copy[input.locale]
+    const mapHref = `/${input.locale}`
+    const bullets = text.aboutBullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')
+    return [
+      `<main>`,
+      `<h1>${escapeHtml(text.aboutHeading)}</h1>`,
+      `<p>${escapeHtml(text.aboutLead)}</p>`,
+      `<ul>${bullets}</ul>`,
+      `<p>${escapeHtml(text.aboutDiffers)}</p>`,
+      `<p><a href="${escapeHtml(mapHref)}">${escapeHtml(text.aboutBack)}</a></p>`,
       `</main>`,
     ].join('')
   }
@@ -236,6 +270,24 @@ export function homeSeoHead(origin: string, locale: SiteLocale): SeoHead {
     ogLocaleAlternate: ogLocaleAlternate(locale),
     siteName: siteName(locale),
     crawlerBody: crawlerBodyHtml({ type: 'home', locale }),
+  }
+}
+
+export function aboutSeoHead(origin: string, locale: SiteLocale): SeoHead {
+  const text = copy[locale]
+  return {
+    lang: htmlLang(locale),
+    title: text.aboutSeoTitle,
+    description: text.aboutSeoDescription,
+    robots: 'index,follow',
+    canonical: `${origin}/${locale}/about`,
+    alternates: hreflangLinks(origin, '/about'),
+    jsonLd: aboutJsonLd(origin, locale),
+    ogType: 'website',
+    ogLocale: OG_LOCALE[locale],
+    ogLocaleAlternate: ogLocaleAlternate(locale),
+    siteName: siteName(locale),
+    crawlerBody: crawlerBodyHtml({ type: 'about', locale }),
   }
 }
 
@@ -394,7 +446,10 @@ export function sitemapXml(
       )
     }
   }
-  if (includeHomes) pushPair('')
+  if (includeHomes) {
+    pushPair('')
+    pushPair('/about')
+  }
   for (const feature of features) {
     const group = feature.kind === 'event' ? 'event' : 'place'
     pushPair(`/${group}/${feature.slug}`)

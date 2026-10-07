@@ -28,6 +28,7 @@ import {
 } from '../src/domain/gis'
 import { featurePublicPath, placesPageRedirect } from '../src/domain/locale'
 import {
+  aboutSeoHead,
   browserOrigin,
   canonicalHostRedirect,
   featureSeoHead,
@@ -130,6 +131,7 @@ async function handleSeoPage(request: Request, env: Env, seo: SeoPath): Promise<
   const shell = await spaShell(env, request)
   const measurementId = gaId(request, env)
   if (seo.type === 'home') return html(injectSeoHead(shell, homeSeoHead(origin, seo.locale), measurementId))
+  if (seo.type === 'about') return html(injectSeoHead(shell, aboutSeoHead(origin, seo.locale), measurementId))
   const row = await env.DB.prepare('SELECT * FROM features WHERE slug = ?').bind(seo.slug).first<FeatureRow>()
   if (!row) return html(injectSeoHead(shell, notFoundSeoHead(origin, seo.locale), measurementId), 404)
   const feature = featureRowToFeature(row)

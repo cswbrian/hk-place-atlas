@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Feature } from './feature'
 import {
+  aboutSeoHead,
   canonicalHostRedirect,
   browserOrigin,
   crawlerBodyHtml,
@@ -69,6 +70,12 @@ describe('parseSeoPath', () => {
     expect(parseSeoPath('/en/places')).toBeNull()
     expect(parseSeoPath('/zh-hk/places/high-house-1981')).toBeNull()
     expect(parseSeoPath('/en/place/high-house-1981')?.type).toBe('feature')
+  })
+
+  it('reads about pages', () => {
+    expect(parseSeoPath('/en/about')).toEqual({ type: 'about', locale: 'en' })
+    expect(parseSeoPath('/zh-hk/about')).toEqual({ type: 'about', locale: 'zh-hk' })
+    expect(parseSeoPath('/en/about/extra')).toBeNull()
   })
 })
 
@@ -158,6 +165,26 @@ describe('homeSeoHead', () => {
   })
 })
 
+describe('aboutSeoHead', () => {
+  it('indexes About with brand-first titles and AboutPage JSON-LD', () => {
+    const en = aboutSeoHead('https://hkatlas.fyi', 'en')
+    expect(en.title).toBe('About HK Atlas — Hong Kong history map')
+    expect(en.canonical).toBe('https://hkatlas.fyi/en/about')
+    expect(en.robots).toBe('index,follow')
+    expect(en.jsonLd).toMatchObject({
+      '@type': 'AboutPage',
+      url: 'https://hkatlas.fyi/en/about',
+    })
+    expect(en.crawlerBody).toMatch(/spatial history database/i)
+    expect(en.crawlerBody).toContain('Back to map')
+
+    const zh = aboutSeoHead('https://hkatlas.fyi', 'zh-hk')
+    expect(zh.title).toBe('關於香港地圖集 — 歷史地圖')
+    expect(zh.canonical).toBe('https://hkatlas.fyi/zh-hk/about')
+    expect(zh.crawlerBody).toContain('空間歷史資料庫')
+  })
+})
+
 describe('featureSeoHead', () => {
   it('suffixes the locale h1 title and uses it as og:site_name', () => {
     const en = featureSeoHead(stub, 'https://hkatlas.fyi', 'en')
@@ -235,6 +262,8 @@ describe('sitemapXml', () => {
     ])
     expect(xml).toContain('<loc>https://hkatlas.fyi/en</loc>')
     expect(xml).toContain('<loc>https://hkatlas.fyi/zh-hk</loc>')
+    expect(xml).toContain('<loc>https://hkatlas.fyi/en/about</loc>')
+    expect(xml).toContain('<loc>https://hkatlas.fyi/zh-hk/about</loc>')
     expect(xml).not.toContain('/places')
     expect(xml).toContain('<loc>https://hkatlas.fyi/en/place/cafe-1990</loc>')
     expect(xml).toContain('<loc>https://hkatlas.fyi/zh-hk/event/fair-1997</loc>')
@@ -245,6 +274,8 @@ describe('sitemapXml', () => {
   it('can omit homes on later chunk pages', () => {
     const xml = sitemapXml('https://hkatlas.fyi', [{ kind: 'shop', slug: 'cafe-1990' }], { includeHomes: false })
     expect(xml).not.toContain('<loc>https://hkatlas.fyi/en</loc>')
+    expect(xml).not.toContain('<loc>https://hkatlas.fyi/en/about</loc>')
+    expect(xml).not.toContain('<loc>https://hkatlas.fyi/zh-hk/about</loc>')
     expect(xml).toContain('<loc>https://hkatlas.fyi/en/place/cafe-1990</loc>')
   })
 })
