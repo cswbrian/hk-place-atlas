@@ -136,7 +136,7 @@ export function homeJsonLd(origin: string, locale: SiteLocale) {
     '@context': 'https://schema.org' as const,
     '@type': 'WebSite' as const,
     name: copy[locale].title,
-    description: copy[locale].tagline,
+    description: copy[locale].seoDescription,
     url: `${origin}/${locale}`,
     inLanguage: ['en', 'zh-Hant-HK'] as const,
     about: {
@@ -163,7 +163,16 @@ export function crawlerBodyHtml(
 ): string {
   if (input.type === 'home') {
     const text = copy[input.locale]
-    return `<main><h1>${escapeHtml(text.title)}</h1><p>${escapeHtml(text.tagline)}</p><p>Hong Kong · 香港</p></main>`
+    const aboutHref = `/${input.locale}/about`
+    const bullets = text.aboutBullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')
+    return [
+      `<main>`,
+      `<h1>${escapeHtml(text.title)}</h1>`,
+      `<p>${escapeHtml(text.aboutLead)}</p>`,
+      `<ul>${bullets}</ul>`,
+      `<p><a href="${escapeHtml(aboutHref)}">${escapeHtml(text.aboutNav)}</a></p>`,
+      `</main>`,
+    ].join('')
   }
   if (input.type === 'notFound') {
     const text = copy[input.locale]
@@ -216,8 +225,8 @@ export function featureSeoHead(feature: Feature, origin: string, locale: SiteLoc
 export function homeSeoHead(origin: string, locale: SiteLocale): SeoHead {
   return {
     lang: htmlLang(locale),
-    title: copy[locale].title,
-    description: copy[locale].tagline,
+    title: copy[locale].seoTitle,
+    description: copy[locale].seoDescription,
     robots: 'index,follow',
     canonical: `${origin}/${locale}`,
     alternates: hreflangLinks(origin, '/'),
@@ -403,10 +412,11 @@ export function llmsTxt(origin: string): string {
   return [
     '# HK Atlas · 香港地圖集',
     '',
-    '> Bilingual map of Hong Kong buildings, shops, and events over time.',
+    '> Spatial History Database / 空間歷史資料庫 — bilingual map of Hong Kong buildings, shops, and events over time.',
     '',
     `- English: ${base}/en`,
     `- 繁體中文: ${base}/zh-hk`,
+    `- About: ${base}/en/about · ${base}/zh-hk/about`,
     `- Places: ${base}/en/place/{slug} and ${base}/zh-hk/place/{slug}`,
     `- Events: ${base}/en/event/{slug} and ${base}/zh-hk/event/{slug}`,
     `- Sitemap: ${base}/sitemap.xml`,

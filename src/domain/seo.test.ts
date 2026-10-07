@@ -128,25 +128,33 @@ describe('homeJsonLd', () => {
       inLanguage: ['en', 'zh-Hant-HK'],
       about: { '@type': 'Place', name: 'Hong Kong', address: { addressCountry: 'HK' } },
     })
+    expect(homeJsonLd('https://hkatlas.fyi', 'en').description).toMatch(/Spatial history database/i)
     expect(homeJsonLd('https://hkatlas.fyi', 'zh-hk')).toMatchObject({
       '@type': 'WebSite',
       name: '香港地圖集',
       url: 'https://hkatlas.fyi/zh-hk',
     })
+    expect(homeJsonLd('https://hkatlas.fyi', 'zh-hk').description).toContain('空間歷史資料庫')
   })
 })
 
 describe('homeSeoHead', () => {
-  it('matches the locale h1 in title, site name, and crawler body', () => {
+  it('uses brand-first keyword titles and spatial-history descriptions', () => {
     const en = homeSeoHead('https://hkatlas.fyi', 'en')
-    expect(en.title).toBe('HK Atlas')
+    expect(en.title).toBe('HK Atlas — Hong Kong history map of places')
+    expect(en.description).toMatch(/Spatial history database/i)
     expect(en.siteName).toBe('HK Atlas')
     expect(en.crawlerBody).toContain('<h1>HK Atlas</h1>')
+    expect(en.crawlerBody).toMatch(/spatial history database/i)
+    expect(en.crawlerBody).toContain('/en/about')
 
     const zh = homeSeoHead('https://hkatlas.fyi', 'zh-hk')
-    expect(zh.title).toBe('香港地圖集')
+    expect(zh.title).toBe('香港地圖集 — 歷史地圖')
+    expect(zh.description).toContain('空間歷史資料庫')
     expect(zh.siteName).toBe('香港地圖集')
     expect(zh.crawlerBody).toContain('<h1>香港地圖集</h1>')
+    expect(zh.crawlerBody).toContain('空間歷史資料庫')
+    expect(zh.crawlerBody).toContain('/zh-hk/about')
   })
 })
 
@@ -272,7 +280,10 @@ describe('llmsTxt', () => {
   it('summarizes the atlas for AI crawlers', () => {
     const body = llmsTxt('https://hkatlas.fyi')
     expect(body).toContain('HK Atlas · 香港地圖集')
+    expect(body).toMatch(/Spatial History Database/i)
+    expect(body).toContain('空間歷史資料庫')
     expect(body).toContain('https://hkatlas.fyi/en')
+    expect(body).toContain('/en/about')
     expect(body).not.toContain('/places')
     expect(body).toContain('/place/{slug}')
     expect(body).toContain('sitemap')
@@ -280,6 +291,12 @@ describe('llmsTxt', () => {
 })
 
 describe('crawlerBodyHtml', () => {
+  it('frames the home page as a spatial history database', () => {
+    const en = crawlerBodyHtml({ type: 'home', locale: 'en' })
+    expect(en).toMatch(/spatial history database/i)
+    expect(en).toContain('href="/en/about"')
+  })
+
   it('renders readable place copy for crawlers inside #root', () => {
     const body = crawlerBodyHtml({ type: 'feature', feature: stub, locale: 'en' })
     expect(body).toContain('<main')
