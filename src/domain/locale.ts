@@ -18,6 +18,25 @@ export const copy = {
   en: {
     title: 'HK Atlas',
     tagline: 'Hong Kong buildings, shops, and events over time',
+    seoTitle: 'HK Atlas — Hong Kong history map of places',
+    seoDescription:
+      'Spatial history database — an interactive map of Hong Kong’s historical places: buildings, shops, and events over time.',
+    category: 'Spatial History Database',
+    aboutNav: 'About',
+    aboutHeading: 'About HK Atlas',
+    aboutLead:
+      'HK Atlas is a spatial history database of Hong Kong places — buildings, shops, and events — on an interactive map over time.',
+    aboutBullets: [
+      'Browse clustered places on the map; open a pin for names, dates, notes, and sources.',
+      'English and 繁體中文; standing and demolished places alike.',
+      'Sign in to add places, photos, and edits.',
+    ],
+    aboutDiffers:
+      'Unlike historical paper-map overlays or archive portals, HK Atlas is a structured place record you can explore and improve.',
+    aboutBack: 'Back to map',
+    aboutSeoTitle: 'About HK Atlas — Hong Kong history map',
+    aboutSeoDescription:
+      'About HK Atlas, a spatial history database and interactive map of Hong Kong’s historical places.',
     thisSite: 'This site',
     close: 'Close',
     emptySite: 'Nothing recorded here yet.',
@@ -121,6 +140,23 @@ export const copy = {
   'zh-hk': {
     title: '香港地圖集',
     tagline: '香港樓宇、店舖與事件的時間地圖',
+    seoTitle: '香港地圖集 — 歷史地圖',
+    seoDescription: '空間歷史資料庫 — 香港歷史地方互動地圖，涵蓋樓宇、店舖與事件。',
+    category: '空間歷史資料庫',
+    aboutNav: '關於',
+    aboutHeading: '關於香港地圖集',
+    aboutLead:
+      '香港地圖集是一個空間歷史資料庫，以互動地圖記錄香港地方——樓宇、店舖與事件——隨時間演變。',
+    aboutBullets: [
+      '在地圖上瀏覽聚類地點；點選標記查看名稱、年份、備註與來源。',
+      '支援英文與繁體中文；包括現存與已拆卸的地方。',
+      '登入後可新增地方、照片與編輯。',
+    ],
+    aboutDiffers:
+      '有別於舊地圖疊加或檔案庫入口，香港地圖集是可供探索與協作的結構化地方紀錄。',
+    aboutBack: '返回地圖',
+    aboutSeoTitle: '關於香港地圖集 — 歷史地圖',
+    aboutSeoDescription: '關於香港地圖集：空間歷史資料庫，香港歷史地方的互動地圖。',
     thisSite: '此地',
     close: '關閉',
     emptySite: '此地尚未有紀錄。',
