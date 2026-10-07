@@ -130,7 +130,7 @@ describe('homeJsonLd', () => {
   it('describes a bilingual Hong Kong places website', () => {
     expect(homeJsonLd('https://hkatlas.fyi', 'en')).toMatchObject({
       '@type': 'WebSite',
-      name: 'HK Atlas',
+      name: 'HONG KONG ATLAS',
       url: 'https://hkatlas.fyi/en',
       inLanguage: ['en', 'zh-Hant-HK'],
       about: { '@type': 'Place', name: 'Hong Kong', address: { addressCountry: 'HK' } },
@@ -148,10 +148,10 @@ describe('homeJsonLd', () => {
 describe('homeSeoHead', () => {
   it('uses brand-first keyword titles and spatial-history descriptions', () => {
     const en = homeSeoHead('https://hkatlas.fyi', 'en')
-    expect(en.title).toBe('HK Atlas — Hong Kong history map of places')
+    expect(en.title).toBe('HONG KONG ATLAS — Hong Kong history map of places')
     expect(en.description).toMatch(/Spatial history database/i)
-    expect(en.siteName).toBe('HK Atlas')
-    expect(en.crawlerBody).toContain('<h1>HK Atlas</h1>')
+    expect(en.siteName).toBe('HONG KONG ATLAS')
+    expect(en.crawlerBody).toContain('<h1>HONG KONG ATLAS</h1>')
     expect(en.crawlerBody).toMatch(/spatial history database/i)
     expect(en.crawlerBody).toContain('/en/about')
     expect(en.ogImage).toBe('https://hkatlas.fyi/og.png')
@@ -169,7 +169,7 @@ describe('homeSeoHead', () => {
 describe('aboutSeoHead', () => {
   it('indexes About with brand-first titles and AboutPage JSON-LD', () => {
     const en = aboutSeoHead('https://hkatlas.fyi', 'en')
-    expect(en.title).toBe('About HK Atlas — Hong Kong history map')
+    expect(en.title).toBe('About HONG KONG ATLAS — Hong Kong history map')
     expect(en.canonical).toBe('https://hkatlas.fyi/en/about')
     expect(en.robots).toBe('index,follow')
     expect(en.jsonLd).toMatchObject({
@@ -189,8 +189,8 @@ describe('aboutSeoHead', () => {
 describe('featureSeoHead', () => {
   it('suffixes the locale h1 title and uses it as og:site_name', () => {
     const en = featureSeoHead(stub, 'https://hkatlas.fyi', 'en')
-    expect(en.title).toBe('HIGH HOUSE · HK Atlas')
-    expect(en.siteName).toBe('HK Atlas')
+    expect(en.title).toBe('HIGH HOUSE · HONG KONG ATLAS')
+    expect(en.siteName).toBe('HONG KONG ATLAS')
 
     const zh = featureSeoHead(stub, 'https://hkatlas.fyi', 'zh-hk')
     expect(zh.title).toBe('金高大廈 · 香港地圖集')
@@ -200,7 +200,7 @@ describe('featureSeoHead', () => {
   it('falls back to a Hong Kong place description when notes are empty', () => {
     const empty = { ...stub, body: { ...stub.body, notes: '' } }
     const en = featureSeoHead(empty, 'https://hkatlas.fyi', 'en')
-    expect(en.description).toBe('HIGH HOUSE — historical place in Hong Kong on HK Atlas')
+    expect(en.description).toBe('HIGH HOUSE — historical place in Hong Kong on HONG KONG ATLAS')
     const zh = featureSeoHead(empty, 'https://hkatlas.fyi', 'zh-hk')
     expect(zh.description).toBe('金高大廈 — 香港地圖集上的香港歷史地方')
   })
@@ -319,7 +319,7 @@ describe('sitemapPageCount', () => {
 describe('llmsTxt', () => {
   it('summarizes the atlas for AI crawlers', () => {
     const body = llmsTxt('https://hkatlas.fyi')
-    expect(body).toContain('HK Atlas · 香港地圖集')
+    expect(body).toContain('HONG KONG ATLAS · 香港地圖集')
     expect(body).toMatch(/Spatial History Database/i)
     expect(body).toContain('空間歷史資料庫')
     expect(body).toContain('https://hkatlas.fyi/en')
@@ -372,7 +372,7 @@ describe('injectSeoHead', () => {
         ogType: 'website',
         ogLocale: 'en_US',
         ogLocaleAlternate: 'zh_HK',
-        siteName: 'HK Atlas',
+        siteName: 'HONG KONG ATLAS',
         ogImage: 'https://atlas.example/og.png',
         crawlerBody: '<main><h1>Cafe</h1></main>',
       },
@@ -383,7 +383,7 @@ describe('injectSeoHead', () => {
     expect(html).toContain('name="robots" content="index,follow"')
     expect(html).toContain('hreflang="zh-Hant"')
     expect(html).toContain('property="og:title" content="Cafe &amp; Bar"')
-    expect(html).toContain('property="og:site_name" content="HK Atlas"')
+    expect(html).toContain('property="og:site_name" content="HONG KONG ATLAS"')
     expect(html).toContain('property="og:url" content="https://atlas.example/en/place/cafe"')
     expect(html).toContain('property="og:image" content="https://atlas.example/og.png"')
     expect(html).toContain('name="twitter:image" content="https://atlas.example/og.png"')

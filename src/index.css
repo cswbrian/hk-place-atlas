@@ -73,20 +73,34 @@ body {
 }
 
 .chrome {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 24px;
-  padding: 8px 24px;
+  padding: 16px 24px;
 }
 
 .chrome h1 {
   margin: 0;
-  font: 400 12px/1.2 var(--ui);
+  font: 400 14px/1.2 "Libre Caslon Display", "Times New Roman", serif;
   letter-spacing: 0.01em;
 }
 
+html[lang^="zh"] .chrome h1 {
+  font-family: "Cactus Classical Serif", "Noto Sans HK", "PingFang HK", serif;
+}
+
 .chrome-brand {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.chrome-actions {
   display: flex;
   align-items: center;
   gap: 16px;

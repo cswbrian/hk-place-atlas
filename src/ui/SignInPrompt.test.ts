@@ -16,7 +16,7 @@ describe('SignInPrompt', () => {
     expect(html).toContain('role="dialog"')
     expect(html).toContain('aria-modal="true"')
     expect(html).toContain('Sign in to add a place')
-    expect(html).toContain('Sign in with Google to add places, photos, and edits to HK Atlas.')
+    expect(html).toContain('Sign in with Google to add places, photos, and edits to HONG KONG ATLAS.')
     expect(html).toContain('href="/api/auth/google?return=%2Fen%3FauthIntent%3Dadd"')
     expect(html).toContain('google-sign-in')
     expect(html).toContain('Sign in with Google')
@@ -35,7 +35,7 @@ describe('SignInPrompt', () => {
       }),
     )
     expect(html).toContain('Sign in to contribute')
-    expect(html).toContain('Sign in with Google to add places, photos, and edits to HK Atlas.')
+    expect(html).toContain('Sign in with Google to add places, photos, and edits to HONG KONG ATLAS.')
   })
 
   it('uses edit and photo titles', () => {

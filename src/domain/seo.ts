@@ -248,7 +248,7 @@ export function featureSeoHead(feature: Feature, origin: string, locale: SiteLoc
   const fallback =
     locale === 'zh-hk'
       ? `${name} — 香港地圖集上的香港歷史地方`
-      : `${name} — historical place in Hong Kong on HK Atlas`
+      : `${name} — historical place in Hong Kong on HONG KONG ATLAS`
   const description = feature.body.notes.trim() || fallback
   return {
     lang: htmlLang(locale),
@@ -481,7 +481,7 @@ export function sitemapXml(
 export function llmsTxt(origin: string): string {
   const base = origin.replace(/\/+$/, '')
   return [
-    '# HK Atlas · 香港地圖集',
+    '# HONG KONG ATLAS · 香港地圖集',
     '',
     '> Spatial History Database / 空間歷史資料庫 — bilingual map of Hong Kong buildings, shops, and events over time.',
     '',

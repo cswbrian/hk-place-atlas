@@ -452,6 +452,8 @@ function AtlasApp() {
       <header className="chrome">
         <div className="chrome-brand">
           <h1>{text.title}</h1>
+        </div>
+        <div className="chrome-actions">
           <a
             href={`/${locale}/about`}
             className="chrome-about"
@@ -463,31 +465,31 @@ function AtlasApp() {
           >
             {text.aboutNav}
           </a>
+          <nav className="lang-switch" aria-label="Language">
+            <a
+              href={`${switchLocalePath(path, otherLocale)}${search}`}
+              hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
+              lang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
+              onClick={(event) => {
+                event.preventDefault()
+                go(`${switchLocalePath(path, otherLocale)}${search}`)
+              }}
+            >
+              {text.otherLanguage}
+            </a>
+            {auth && !user ? (
+              <button type="button" className="linkish" onClick={() => setSignInIntent('contribute')}>
+                {text.signIn}
+              </button>
+            ) : null}
+            {user ? (
+              <span className="atlas-user">
+                {user.email}
+                <a href={`/api/auth/logout?return=${encodeURIComponent(path + search)}`}>{text.signOut}</a>
+              </span>
+            ) : null}
+          </nav>
         </div>
-        <nav className="lang-switch" aria-label="Language">
-          <a
-            href={`${switchLocalePath(path, otherLocale)}${search}`}
-            hrefLang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
-            lang={otherLocale === 'zh-hk' ? 'zh-Hant' : 'en'}
-            onClick={(event) => {
-              event.preventDefault()
-              go(`${switchLocalePath(path, otherLocale)}${search}`)
-            }}
-          >
-            {text.otherLanguage}
-          </a>
-          {auth && !user ? (
-            <button type="button" className="linkish" onClick={() => setSignInIntent('contribute')}>
-              {text.signIn}
-            </button>
-          ) : null}
-          {user ? (
-            <span className="atlas-user">
-              {user.email}
-              <a href={`/api/auth/logout?return=${encodeURIComponent(path + search)}`}>{text.signOut}</a>
-            </span>
-          ) : null}
-        </nav>
       </header>
       {rest === '/about' ? (
         <AboutPage locale={locale} onBack={() => go(`/${locale}`)} />

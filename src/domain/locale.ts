@@ -16,27 +16,27 @@ export type PlacesPath = { slug: string | null }
 
 export const copy = {
   en: {
-    title: 'HK Atlas',
+    title: 'HONG KONG ATLAS',
     tagline: 'Hong Kong buildings, shops, and events over time',
-    seoTitle: 'HK Atlas — Hong Kong history map of places',
+    seoTitle: 'HONG KONG ATLAS — Hong Kong history map of places',
     seoDescription:
       'Spatial history database — an interactive map of Hong Kong’s historical places: buildings, shops, and events over time.',
     category: 'Spatial History Database',
     aboutNav: 'About',
-    aboutHeading: 'About HK Atlas',
+    aboutHeading: 'About HONG KONG ATLAS',
     aboutLead:
-      'HK Atlas is a spatial history database of Hong Kong places — buildings, shops, and events — on an interactive map over time.',
+      'HONG KONG ATLAS is a spatial history database of Hong Kong places — buildings, shops, and events — on an interactive map over time.',
     aboutBullets: [
       'Browse clustered places on the map; open a pin for names, dates, notes, and sources.',
       'English and 繁體中文; standing and demolished places alike.',
       'Sign in to add places, photos, and edits.',
     ],
     aboutDiffers:
-      'Unlike historical paper-map overlays or archive portals, HK Atlas is a structured place record you can explore and improve.',
+      'Unlike historical paper-map overlays or archive portals, HONG KONG ATLAS is a structured place record you can explore and improve.',
     aboutBack: 'Back to map',
-    aboutSeoTitle: 'About HK Atlas — Hong Kong history map',
+    aboutSeoTitle: 'About HONG KONG ATLAS — Hong Kong history map',
     aboutSeoDescription:
-      'About HK Atlas, a spatial history database and interactive map of Hong Kong’s historical places.',
+      'About HONG KONG ATLAS, a spatial history database and interactive map of Hong Kong’s historical places.',
     thisSite: 'This site',
     close: 'Close',
     emptySite: 'Nothing recorded here yet.',
@@ -51,7 +51,7 @@ export const copy = {
     signInPromptAddTitle: 'Sign in to add a place',
     signInPromptEditTitle: 'Sign in to edit',
     signInPromptPhotoTitle: 'Sign in to add a photo',
-    signInPromptBody: 'Sign in with Google to add places, photos, and edits to HK Atlas.',
+    signInPromptBody: 'Sign in with Google to add places, photos, and edits to HONG KONG ATLAS.',
     add: 'Add',
     addPlace: 'Add place',
     edit: 'Edit',
