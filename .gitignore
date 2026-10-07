@@ -27,3 +27,6 @@ dist-ssr
 .wrangler
 public/catalog.geojson
 .dev.vars
+
+# Git worktrees
+.worktrees
