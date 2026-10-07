@@ -154,7 +154,6 @@ describe('homeSeoHead', () => {
     expect(en.crawlerBody).toContain('<h1>HONG KONG ATLAS</h1>')
     expect(en.crawlerBody).toMatch(/community-built urban history map directory/i)
     expect(en.crawlerBody).toContain('/en/about')
-    expect(en.ogImage).toBe('https://hkatlas.fyi/og.png')
 
     const zh = homeSeoHead('https://hkatlas.fyi', 'hk')
     expect(zh.title).toBe('香港地圖集 — 歷史地圖')
@@ -378,7 +377,6 @@ describe('injectSeoHead', () => {
         ogLocale: 'en_US',
         ogLocaleAlternate: 'zh_HK',
         siteName: 'HONG KONG ATLAS',
-        ogImage: 'https://atlas.example/og.png',
         crawlerBody: '<main><h1>Cafe</h1></main>',
       },
       'G-NKVYYE1Y49',
@@ -390,9 +388,9 @@ describe('injectSeoHead', () => {
     expect(html).toContain('property="og:title" content="Cafe &amp; Bar"')
     expect(html).toContain('property="og:site_name" content="HONG KONG ATLAS"')
     expect(html).toContain('property="og:url" content="https://atlas.example/en/place/cafe"')
-    expect(html).toContain('property="og:image" content="https://atlas.example/og.png"')
-    expect(html).toContain('name="twitter:image" content="https://atlas.example/og.png"')
-    expect(html).toContain('name="twitter:card" content="summary_large_image"')
+    expect(html).not.toContain('property="og:image"')
+    expect(html).not.toContain('name="twitter:image"')
+    expect(html).toContain('name="twitter:card" content="summary"')
     expect(html).toContain('<main><h1>Cafe</h1></main>')
     expect(html).toContain('G-NKVYYE1Y49')
     expect(html).toContain('\\u003c')

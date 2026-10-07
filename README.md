@@ -61,10 +61,9 @@ Fallback if DNS TXT is slow: URL-prefix property `https://hkatlas.fyi` verified 
 
 1. Confirm view-source on `https://hkatlas.fyi/hk` shows title `香港地圖集 — 歷史地圖`.
 2. Confirm `https://hkatlas.fyi/hk/about` and `/en/about` return HTML with 空間歷史資料庫 / Spatial History Database copy.
-3. Confirm `og:image` points at `https://hkatlas.fyi/og.png` and that URL loads.
-4. Search Console → Sitemaps → resubmit `https://hkatlas.fyi/sitemap.xml` if needed.
-5. URL inspection → request indexing for `/hk`, `/en`, `/hk/about`, `/en/about`.
-6. Optional: Bing Webmaster Tools → submit the same sitemap.
+3. Search Console → Sitemaps → resubmit `https://hkatlas.fyi/sitemap.xml` if needed.
+4. URL inspection → request indexing for `/hk`, `/en`, `/hk/about`, `/en/about`.
+5. Optional: Bing Webmaster Tools → submit the same sitemap.
 
 Positioning: HONG KONG ATLAS is a Spatial History Database (空間歷史資料庫) — bilingual map of Hong Kong places over time.
 
