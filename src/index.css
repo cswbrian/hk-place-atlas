@@ -1064,23 +1064,24 @@ input[type='radio']:focus-visible {
   margin: 0;
   padding: 6px 10px;
   border: 1px solid var(--border);
-  background: var(--panel, #fff);
-  color: inherit;
+  background: var(--background);
+  color: var(--foreground);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
 .history-map-toggle.is-on {
-  background: #111;
-  color: #fff;
-  border-color: #111;
+  background: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
 }
 
 .history-map-panel {
   padding: 8px 10px;
   border: 1px solid var(--border);
-  background: var(--panel, #fff);
+  background: var(--background);
+  color: var(--foreground);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1675,7 +1676,7 @@ button.photo-delete:hover {
     border-top: 1px solid #333;
     max-height: 40vh;
   }
-  button:not(.linkish):not(.ghost):not(.chip):not(.photo-thumb):not(.photo-delete):not(.photo-pin-name):not(.photo-pin-remove):not(.lightbox-icon):not(.sign-in-prompt-close):not(.chrome-menu-toggle),
+  button:not(.linkish):not(.ghost):not(.chip):not(.photo-thumb):not(.photo-delete):not(.photo-pin-name):not(.photo-pin-remove):not(.lightbox-icon):not(.sign-in-prompt-close):not(.chrome-menu-toggle):not(.history-map-toggle),
   .upload,
   a.primary {
     min-height: 44px;
