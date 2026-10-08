@@ -503,6 +503,13 @@ a.primary:hover {
   text-decoration: underline;
 }
 
+.detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px;
+}
+
 .detail-back.ghost {
   display: inline-flex;
   width: auto;
@@ -510,8 +517,11 @@ a.primary:hover {
   min-height: 0;
   align-items: center;
   justify-content: flex-start;
-  margin: 0 0 8px;
   padding: 0;
+}
+
+.detail-edit {
+  margin-left: auto;
 }
 
 .detail-back.ghost:hover {
@@ -726,6 +736,22 @@ a.primary:hover {
 
 .catalog-row .linkish {
   font-weight: 500;
+}
+
+.catalog-row-current {
+  margin: 0 -8px;
+  padding: 0 8px;
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.catalog-row-current .catalog-name > span {
+  font-weight: 500;
+}
+
+.catalog-row-current .muted,
+.catalog-row-current .catalog-year-circa {
+  color: inherit;
 }
 
 .link-list,

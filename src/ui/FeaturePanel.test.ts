@@ -124,32 +124,4 @@ describe('FeaturePanel map-click drill-in levels', () => {
     expect(html).not.toContain('This site')
   })
 
-  it('hides History when onShowHistory is not provided', () => {
-    const html = renderToStaticMarkup(
-      createElement(FeaturePanel, {
-        locale: 'en',
-        site,
-        features: [place],
-        selected: place,
-        edges: [],
-        onSelectSlug: () => {},
-      }),
-    )
-    expect(html).not.toContain('History')
-  })
-
-  it('shows History when onShowHistory is provided', () => {
-    const html = renderToStaticMarkup(
-      createElement(FeaturePanel, {
-        locale: 'en',
-        site,
-        features: [place],
-        selected: place,
-        edges: [],
-        onSelectSlug: () => {},
-        onShowHistory: () => {},
-      }),
-    )
-    expect(html).toContain('History')
-  })
 })

@@ -4,7 +4,7 @@ import { updatedAgo, yearSpan, type RecentItem } from '../domain/recent'
 import type { SiteQueryResult } from '../domain/querySite'
 import { EstablishmentDetail } from './EstablishmentDetail'
 import { SitePanel } from './SitePanel'
-import type { AuditEntry, FeatureEdge } from '../api/features'
+import type { FeatureEdge } from '../api/features'
 import type { ReactNode } from 'react'
 
 type Props = {
@@ -18,9 +18,6 @@ type Props = {
   onBack?: () => void
   onAdd?: () => void
   onEdit?: () => void
-  audit?: AuditEntry[] | null
-  onShowHistory?: () => void
-  onRevert?: (id: string) => void
   photos?: ReactNode
   counts?: { places: number; photos: number } | null
 }
@@ -36,9 +33,6 @@ export function FeaturePanel({
   onBack,
   onAdd,
   onEdit,
-  audit = null,
-  onShowHistory,
-  onRevert,
   photos,
   counts = null,
 }: Props) {
@@ -59,8 +53,8 @@ export function FeaturePanel({
           onSelect={selectId}
           onBack={onBack}
           onEdit={onEdit}
+          photos={photos}
         />
-        {photos}
         {edges.length > 0 ? (
           <section className="detail">
             <h3>Links</h3>
@@ -72,45 +66,6 @@ export function FeaturePanel({
                 </li>
               ))}
             </ul>
-          </section>
-        ) : null}
-        {onShowHistory ? (
-          <section className="detail">
-            {audit == null ? (
-              <h3>
-                <button type="button" className="linkish" onClick={onShowHistory}>
-                  {text.history}
-                </button>
-              </h3>
-            ) : (
-              <>
-                <h3>{text.history}</h3>
-                {audit.length === 0 ? (
-                  <p className="hint">{text.noHistory}</p>
-                ) : (
-                  <ul className="ref-list">
-                    {audit.map((entry) => (
-                      <li key={entry.id}>
-                        <span>
-                          {entry.at.slice(0, 10)} ·{' '}
-                          {entry.entityType === 'photo'
-                            ? entry.action === 'delete'
-                              ? text.photoRemoved
-                              : text.photoAdded
-                            : entry.action}{' '}
-                          · {entry.actorEmail || 'wiki'}
-                        </span>
-                        {onRevert && entry.entityType !== 'photo' ? (
-                          <button type="button" className="linkish" onClick={() => onRevert(entry.id)}>
-                            {text.revert}
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
           </section>
         ) : null}
       </>

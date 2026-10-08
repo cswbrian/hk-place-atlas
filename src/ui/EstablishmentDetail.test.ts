@@ -109,6 +109,46 @@ describe('EstablishmentDetail', () => {
     expect(html).toContain('P&amp;O Building (4th Generation)')
   })
 
+  it('shows photos, then notes, then the site timeline, then buildings and lots', () => {
+    const html = renderToStaticMarkup(
+      createElement(EstablishmentDetail, {
+        establishment: { ...current, notes: 'Harbour frontage' },
+        establishments: [current, earlier],
+        locale: 'en',
+        onSelect: () => {},
+        photos: createElement('section', { id: 'photos-slot' }),
+      }),
+    )
+    const order = ['photos-slot', 'Harbour frontage', 'On this site over time', 'IL 1'].map((marker) =>
+      html.indexOf(marker),
+    )
+    expect(order.every((at) => at >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+  })
+
+  it('puts edit in the header next to back, above the title', () => {
+    const html = renderToStaticMarkup(
+      createElement(EstablishmentDetail, {
+        establishment: current,
+        establishments: [current, earlier],
+        locale: 'en',
+        onSelect: () => {},
+        onBack: () => {},
+        onEdit: () => {},
+      }),
+    )
+    const head = html.slice(html.indexOf('class="detail-head"'), html.indexOf('<h2>'))
+    expect(head).toContain('detail-back')
+    expect(head).toContain('class="detail-edit">Edit</button>')
+    expect(html.match(/>Edit<\/button>/g)).toHaveLength(1)
+  })
+
+  it('marks the open place in the same-site list as current', () => {
+    const html = render('en')
+    expect(html).toContain('class="catalog-row catalog-row-current" aria-current="page"')
+    expect(html.match(/catalog-row-current/g)).toHaveLength(1)
+  })
+
   it('puts back in the header as an icon with aria-label when onBack is set', () => {
     const html = renderToStaticMarkup(
       createElement(EstablishmentDetail, {

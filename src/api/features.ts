@@ -1,9 +1,6 @@
 import type { Feature } from '../domain/feature'
 import type { Bbox } from '../domain/featureQuery'
-import type { AuditEntry } from '../domain/audit'
 import type { RecentItem } from '../domain/recent'
-
-export type { AuditEntry }
 
 export type FeatureEdge = {
   id: string
@@ -92,25 +89,6 @@ export async function fetchSearch(q: string, kind?: string): Promise<Feature[]> 
   const response = await fetch(`/api/search?${params}`)
   if (!response.ok) throw new Error('Could not search')
   return (await response.json()) as Feature[]
-}
-
-export async function fetchAudit(featureId: string): Promise<AuditEntry[]> {
-  const response = await fetch(`/api/audit?featureId=${encodeURIComponent(featureId)}`)
-  if (!response.ok) throw new Error('Could not load history')
-  return (await response.json()) as AuditEntry[]
-}
-
-export async function revertAudit(id: string, updatedAt?: string): Promise<Feature | { deleted: true }> {
-  const response = await fetch(`/api/audit/${encodeURIComponent(id)}/revert`, {
-    method: 'POST',
-    headers: updatedAt ? { 'If-Match': updatedAt } : {},
-  })
-  if (response.status === 401) throw new Error('Sign in required')
-  if (response.status === 429) throw new Error('Too many writes this hour')
-  if (response.status === 412) throw new Error('This record changed — reload and try again')
-  if (response.status === 403) throw new Error('Seed catalog rows cannot be deleted')
-  if (!response.ok) throw new Error('Could not revert')
-  return (await response.json()) as Feature | { deleted: true }
 }
 
 export async function deleteFeature(slug: string, updatedAt: string): Promise<void> {

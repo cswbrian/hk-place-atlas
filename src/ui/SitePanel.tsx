@@ -60,6 +60,7 @@ export function CatalogRow({
   onTitle,
   onEdit,
   editLabel,
+  current = false,
 }: {
   year: string
   circa?: boolean
@@ -69,9 +70,13 @@ export function CatalogRow({
   onTitle?: () => void
   onEdit?: () => void
   editLabel?: string
+  current?: boolean
 }) {
   return (
-    <li className="catalog-row">
+    <li
+      className={current ? 'catalog-row catalog-row-current' : 'catalog-row'}
+      aria-current={current ? 'page' : undefined}
+    >
       <CatalogYearMark text={year} circa={circa} onActivate={onTitle} />
       <div
         className={onTitle ? 'catalog-name catalog-hit' : 'catalog-name'}

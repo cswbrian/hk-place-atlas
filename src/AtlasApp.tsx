@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   deleteFeature,
-  fetchAudit,
   fetchCounts,
   fetchEdges,
   fetchFeatureBySlug,
@@ -10,7 +9,6 @@ import {
   fetchMe,
   fetchOverlay,
   fetchRecent,
-  revertAudit,
   saveFeature,
   type AtlasUser,
   type FeatureEdge,
@@ -20,7 +18,6 @@ import {
   mergeOverlay,
   type CatalogGeojson,
 } from './domain/catalog'
-import type { AuditEntry } from './domain/audit'
 import { featureAsEstablishment, type Feature } from './domain/feature'
 import { featureInBbox, type Bbox } from './domain/featureQuery'
 import {
@@ -100,7 +97,6 @@ function AtlasApp() {
   const [selected, setSelected] = useState<Feature | null>(null)
   const [hitId, setHitId] = useState<string | null>(null)
   const [edges, setEdges] = useState<FeatureEdge[]>([])
-  const [audit, setAudit] = useState<AuditEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [overlay, setOverlay] = useState<Feature[]>([])
   const [user, setUser] = useState<AtlasUser | null>(null)
@@ -125,21 +121,6 @@ function AtlasApp() {
   const siteRequest = useRef(0)
   const photoRequest = useRef(0)
   const mapView = useRef<{ bbox: Bbox; zoom: number } | null>(null)
-  const historyOpen = useRef(false)
-  const loadHistory = useCallback((featureId: string) => {
-    historyOpen.current = true
-    void fetchAudit(featureId)
-      .then((rows) => {
-        if (historyOpen.current) setAudit(rows)
-      })
-      .catch(() => {
-        if (historyOpen.current) setAudit([])
-      })
-  }, [])
-  const closeHistory = useCallback(() => {
-    historyOpen.current = false
-    setAudit((current) => (current === null ? current : null))
-  }, [])
   const loadMapPhotos = useCallback((bbox: Bbox, zoom: number) => {
     mapView.current = { bbox, zoom }
     const request = ++photoRequest.current
@@ -343,8 +324,6 @@ function AtlasApp() {
     if (!featurePath) {
       setSelected((current) => (current ? null : current))
       setEdges((current) => (current.length ? [] : current))
-      historyOpen.current = false
-      setAudit((current) => (current === null ? current : null))
       return
     }
     let cancelled = false
@@ -355,8 +334,6 @@ function AtlasApp() {
           const stub = catalog.features.find((item) => item.properties.slug === featurePath.slug)
           setSelected(stub ? catalogFeatureToFeature(stub) : null)
           setEdges([])
-          historyOpen.current = false
-          setAudit(null)
           return
         }
         setSelected(feature)
@@ -365,8 +342,6 @@ function AtlasApp() {
         } catch {
           setEdges([])
         }
-        historyOpen.current = false
-        setAudit(null)
       })
       .catch(() => {
         if (!cancelled) setSelected(null)
@@ -428,7 +403,6 @@ function AtlasApp() {
     setSite(null)
     setSelected(null)
     setEdges([])
-    closeHistory()
     go(canonicalPath(locale, '/'))
   }
 
@@ -441,7 +415,6 @@ function AtlasApp() {
     setHitId(nextHitId)
     setSelected(null)
     setEdges([])
-    closeHistory()
     void openSite(lng, lat, bbox)
   }
 
@@ -633,7 +606,6 @@ function AtlasApp() {
                         }
                         setSelected(saved)
                         go(featurePublicPath(locale, saved.kind, saved.slug))
-                        closeHistory()
                       })
                       .catch((err: Error) => setFormError(err.message))
                   }}
@@ -675,10 +647,6 @@ function AtlasApp() {
                   onEdit={
                     auth && selected ? () => requireUser('edit', () => startEdit(selected)) : undefined
                   }
-                  audit={user ? audit : null}
-                  onShowHistory={
-                    user && selected ? () => loadHistory(selected.id) : undefined
-                  }
                   photos={
                     selected ? (
                       <PlacePhotos
@@ -702,7 +670,6 @@ function AtlasApp() {
                         onChange={() => {
                           const view = mapView.current
                           if (view) loadMapPhotos(view.bbox, view.zoom)
-                          if (historyOpen.current) loadHistory(selected.id)
                         }}
                       />
                     ) : site ? (
@@ -727,29 +694,6 @@ function AtlasApp() {
                         }}
                       />
                     ) : null
-                  }
-                  onRevert={
-                    user && selected
-                      ? (id) => {
-                          void revertAudit(id, selected.updatedAt)
-                            .then((result) => {
-                              if ('deleted' in result && result.deleted) {
-                                setOverlay((current) => current.filter((item) => item.id !== selected.id))
-                                closePanel()
-                                return
-                              }
-                              if (!('id' in result)) return
-                              setOverlay((current) => [
-                                ...current.filter((item) => item.id !== result.id),
-                                result,
-                              ])
-                              setSelected(result)
-                              go(featurePublicPath(locale, result.kind, result.slug))
-                              loadHistory(result.id)
-                            })
-                            .catch((err: Error) => setError(err.message))
-                        }
-                      : undefined
                   }
                 />
               )}
