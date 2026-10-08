@@ -32,6 +32,13 @@ import {
   parseParcelKind,
   parseSearchText,
 } from '../src/domain/gis'
+import {
+  HISTORY_MAP_MAX_Z,
+  HISTORY_MAP_MIN_Z,
+  historyMapDatasetId,
+  historyMapExportUrl,
+  xyzToMercatorBbox,
+} from '../src/domain/historyMap'
 import { featurePublicPath, placesPageRedirect } from '../src/domain/locale'
 import {
   aboutSeoHead,
@@ -711,6 +718,40 @@ async function handleGis(request: Request, route: ApiRoute, ctx: ExecutionContex
   return response
 }
 
+const HISTORY_MAP_CACHE_SECONDS = 86_400
+
+async function handleHistoryMap(
+  request: Request,
+  route: Extract<ApiRoute, { type: 'historyMap' }>,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  if (route.z < HISTORY_MAP_MIN_Z || route.z > HISTORY_MAP_MAX_Z) {
+    return json({ error: 'invalid history map tile' }, 404)
+  }
+  const bbox = xyzToMercatorBbox(route.z, route.x, route.y)
+  const upstream = historyMapExportUrl(historyMapDatasetId(route.id), bbox)
+  if (!upstream.startsWith('https://portal.csdi.gov.hk/server/rest/services/common/')) {
+    return json({ error: 'invalid history map tile' }, 400)
+  }
+  const cache = caches.default
+  const cacheKey = new Request(new URL(request.url).toString(), { method: 'GET' })
+  const hit = await cache.match(cacheKey)
+  if (hit) return hit
+  const upstreamResponse = await fetch(upstream, {
+    headers: { 'user-agent': 'hk-atlas/1.0' },
+  })
+  const contentType = upstreamResponse.headers.get('content-type') ?? ''
+  if (!upstreamResponse.ok || !contentType.includes('image')) {
+    return json({ error: 'history map upstream failed' }, 502)
+  }
+  const headers = new Headers()
+  headers.set('content-type', contentType)
+  headers.set('cache-control', `public, max-age=${HISTORY_MAP_CACHE_SECONDS}`)
+  const response = new Response(upstreamResponse.body, { status: 200, headers })
+  ctx.waitUntil(cache.put(cacheKey, response.clone()))
+  return response
+}
+
 const PHOTO_LIST_CAP = 200
 
 type PhotoListRow = {
@@ -1208,6 +1249,9 @@ export default {
       && request.method === 'GET'
     ) {
       return handleGis(request, route, ctx)
+    }
+    if (route.type === 'historyMap' && request.method === 'GET') {
+      return handleHistoryMap(request, route, ctx)
     }
     return json({ error: 'method not allowed' }, 405)
   },
