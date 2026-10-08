@@ -95,11 +95,6 @@ CREATE TABLE edges (
   UNIQUE (from_type, from_id, to_type, to_id, rel_type)
 );
 
-CREATE TABLE slug_history (
-  old_slug    TEXT PRIMARY KEY,
-  feature_id  TEXT NOT NULL REFERENCES features(id)
-);
-
 CREATE TABLE users (
   sub         TEXT PRIMARY KEY,
   email       TEXT NOT NULL,
