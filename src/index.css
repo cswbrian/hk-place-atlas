@@ -235,6 +235,40 @@ html[lang^="zh"] .chrome h1 {
   text-underline-offset: 3px;
 }
 
+.legal-page h3 {
+  margin: 1.75em 0 0.5em;
+  font: 500 16px/1.4 var(--ui);
+}
+
+.about-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.about-page .about-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.about-page .about-github:hover span {
+  text-decoration: underline;
+}
+
+.about-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
 h2 .zh,
 h3 .zh,
 button .zh {
@@ -497,6 +531,20 @@ a.primary:hover {
 
 .row label { flex: 1; }
 
+.panel-form .form-actions {
+  align-items: center;
+}
+
+.panel-form .form-delete {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.panel-form .form-delete:hover {
+  color: var(--foreground);
+}
+
 .date-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -507,8 +555,50 @@ a.primary:hover {
 .panel-form label.check {
   flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin: 4px 0 0;
+}
+
+.panel-form fieldset.status-field {
+  border: 0;
+  margin: 10px 0;
+  padding: 0;
+  width: 100%;
+}
+
+.panel-form fieldset.status-field legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.panel-form .status-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.panel-form .status-options label.check {
+  margin: 0;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.panel-form .status-options label.check:has(input:checked) {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.panel-form .status-options label.check:has(input:checked) input[type='radio'] {
+  border-color: var(--background);
+}
+
+.panel-form .status-options label.check:has(input:checked) input[type='radio']:checked {
+  background-image: radial-gradient(circle, var(--background) 45%, transparent 48%);
 }
 
 .date-row label {
@@ -530,9 +620,10 @@ a.primary:hover {
 
 .error {
   margin: 0 0 16px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  border: 0;
+  background: #f85b8b;
+  color: #111;
   font-size: 13px;
 }
 
@@ -707,6 +798,47 @@ fieldset legend {
   font-weight: 400;
 }
 
+input[type='checkbox'],
+input[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  flex-shrink: 0;
+  border: 1.5px solid #fff;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+input[type='radio'] {
+  border-radius: 50%;
+}
+
+input[type='checkbox'] {
+  border-radius: 2px;
+}
+
+input[type='radio']:checked {
+  background-image: radial-gradient(circle, #fff 45%, transparent 48%);
+}
+
+input[type='checkbox']:checked {
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 0.85rem 0.85rem;
+}
+
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .linkish {
   border: none;
   background: none;
@@ -874,18 +1006,6 @@ fieldset legend {
 
 .atlas-search-hits > li.muted {
   padding: 8px 10px;
-}
-
-.atlas-user {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.atlas-user a {
-  color: inherit;
 }
 
 .atlas-map {
@@ -1162,6 +1282,51 @@ button.photo-delete:hover {
   font-size: 13px;
 }
 
+.lightbox-cursor-hint {
+  display: none;
+  position: fixed;
+  z-index: 4300;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #f5f5f5;
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+}
+
+.lightbox-cursor-hint.is-visible {
+  opacity: 1;
+}
+
+.lightbox-cursor-hint p {
+  margin: 0;
+}
+
+.lightbox-cursor-hint p + p {
+  margin-top: 2px;
+  max-width: min(280px, calc(100vw - 16px));
+  color: #d4d4d4;
+  white-space: normal;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lightbox-cursor-hint {
+    display: block;
+  }
+
+  .lightbox-caption-static {
+    display: none;
+  }
+
+  .lightbox-caption:not(.has-error) {
+    display: none;
+  }
+}
+
 .lightbox-body {
   flex: 1;
   min-height: 0;
@@ -1274,8 +1439,7 @@ button.photo-delete:hover {
 }
 
 .photo-pin-name,
-.photo-pin-remove,
-.pin-search button {
+.photo-pin-remove {
   min-height: 0;
   padding: 4px 8px;
   border: 0;
@@ -1286,18 +1450,52 @@ button.photo-delete:hover {
 
 .pin-search {
   flex-direction: column;
-  width: min(220px, 70vw);
-  padding: 8px;
-  gap: 4px;
+  width: min(380px, 85vw);
+  padding: 6px;
+  gap: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.pin-search button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 1px;
+  width: 100%;
+  min-height: 0;
+  padding: 5px 4px;
+  border: 0;
+  border-top: 1px solid #e5e5e5;
+  border-radius: 0;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  white-space: normal;
+}
+
+.pin-search button:first-of-type {
+  border-top: 0;
+  margin-top: 2px;
+}
+
+.pin-search button:hover {
+  background: #f5f5f5;
+  color: #111;
 }
 
 .pin-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']) {
   width: 100%;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border: 1px solid #111;
   border-bottom: 1px solid #111;
   background: #fff;
   color: #111;
+  font-size: 12px;
 }
 
 .pin-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file'])::placeholder {
@@ -1371,17 +1569,14 @@ button.photo-delete:hover {
     gap: 0;
   }
 
-  .chrome-actions.is-open .atlas-user {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    max-width: 16rem;
-    padding: 10px 16px;
-    overflow-wrap: anywhere;
-    color: inherit;
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
-
-  .workspace { grid-template-columns: 1fr; }
+  /* Desktop map min-height overflows the stacked row and covers welcome counts. */
+  .map {
+    min-height: 0;
+  }
   .sidebar { border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
   .lightbox-body {
     grid-template-columns: 1fr;
@@ -1396,5 +1591,9 @@ button.photo-delete:hover {
   .upload,
   a.primary {
     min-height: 44px;
+  }
+
+  .pin-search button {
+    min-height: 0;
   }
 }

@@ -1,11 +1,13 @@
 import type { Event, LandmarksOrHistoricalBuildings, LocalBusiness, WithContext } from 'schema-dts'
 import { copy, featurePublicPath, parseFeaturePath, parseLocalePath, type SiteLocale } from './locale'
 import type { Feature, FeatureKind } from './feature'
+import { GITHUB_URL, LEGAL_PAGES, legal, parseLegalPage, type LegalPageId } from './legal'
 
 export type SeoHome = { type: 'home'; locale: SiteLocale }
 export type SeoFeature = { type: 'feature'; locale: SiteLocale; group: 'place' | 'event'; slug: string }
 export type SeoAbout = { type: 'about'; locale: SiteLocale }
-export type SeoPath = SeoHome | SeoFeature | SeoAbout
+export type SeoLegal = { type: 'legal'; locale: SiteLocale; page: LegalPageId }
+export type SeoPath = SeoHome | SeoFeature | SeoAbout | SeoLegal
 
 export type HreflangLink = { hreflang: string; href: string }
 
@@ -39,6 +41,8 @@ export function parseSeoPath(pathname: string): SeoPath | null {
   if (first !== 'en' && first !== 'hk') return null
   if (rest === '/') return { type: 'home', locale }
   if (rest === '/about') return { type: 'about', locale }
+  const page = parseLegalPage(rest)
+  if (page) return { type: 'legal', locale, page }
   const feature = parseFeaturePath(rest)
   if (!feature) return null
   return { type: 'feature', locale, group: feature.group, slug: feature.slug }
@@ -178,6 +182,7 @@ export function crawlerBodyHtml(
   input:
     | { type: 'home'; locale: SiteLocale }
     | { type: 'about'; locale: SiteLocale }
+    | { type: 'legal'; locale: SiteLocale; page: LegalPageId }
     | { type: 'feature'; feature: Feature; locale: SiteLocale }
     | { type: 'notFound'; locale: SiteLocale },
 ): string {
@@ -206,6 +211,28 @@ export function crawlerBodyHtml(
       `<p>${escapeHtml(text.aboutCan)}</p>`,
       `<ul>${bullets}</ul>`,
       `<p><a href="${escapeHtml(mapHref)}">${escapeHtml(text.aboutBack)}</a></p>`,
+      `</main>`,
+      `<footer><p>`,
+      `<a href="/${input.locale}/privacy">${escapeHtml(text.privacyNav)}</a> · `,
+      `<a href="/${input.locale}/terms">${escapeHtml(text.termsNav)}</a> · `,
+      `<a href="${escapeHtml(GITHUB_URL)}">${escapeHtml(text.githubContribute)}</a>`,
+      `</p></footer>`,
+    ].join('')
+  }
+  if (input.type === 'legal') {
+    const doc = legal[input.locale][input.page]
+    const sections = doc.sections
+      .map(
+        (section) =>
+          `<h2>${escapeHtml(section.heading)}</h2>${section.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('')}`,
+      )
+      .join('')
+    return [
+      `<main>`,
+      `<h1>${escapeHtml(doc.heading)}</h1>`,
+      `<p>${escapeHtml(doc.updated)}</p>`,
+      sections,
+      `<p><a href="/${input.locale}/about">${escapeHtml(copy[input.locale].aboutNav)}</a></p>`,
       `</main>`,
     ].join('')
   }
@@ -294,6 +321,33 @@ export function aboutSeoHead(origin: string, locale: SiteLocale): SeoHead {
     ogLocaleAlternate: ogLocaleAlternate(locale),
     siteName: siteName(locale),
     crawlerBody: crawlerBodyHtml({ type: 'about', locale }),
+  }
+}
+
+export function legalSeoHead(origin: string, locale: SiteLocale, page: LegalPageId): SeoHead {
+  const doc = legal[locale][page]
+  const url = `${origin}/${locale}/${page}`
+  return {
+    lang: htmlLang(locale),
+    title: doc.seoTitle,
+    description: doc.seoDescription,
+    robots: 'index,follow',
+    canonical: url,
+    alternates: hreflangLinks(origin, `/${page}`),
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: doc.heading,
+      description: doc.seoDescription,
+      url,
+      inLanguage: htmlLang(locale),
+      isPartOf: { '@type': 'WebSite', name: copy[locale].title, url: `${origin}/${locale}` },
+    },
+    ogType: 'website',
+    ogLocale: OG_LOCALE[locale],
+    ogLocaleAlternate: ogLocaleAlternate(locale),
+    siteName: siteName(locale),
+    crawlerBody: crawlerBodyHtml({ type: 'legal', locale, page }),
   }
 }
 
@@ -455,6 +509,7 @@ export function sitemapXml(
   if (includeHomes) {
     pushPair('')
     pushPair('/about')
+    for (const page of LEGAL_PAGES) pushPair(`/${page}`)
   }
   for (const feature of features) {
     const group = feature.kind === 'event' ? 'event' : 'place'
@@ -478,6 +533,9 @@ export function llmsTxt(origin: string): string {
     `- English: ${base}/en`,
     `- 繁體中文: ${base}/hk`,
     `- About: ${base}/en/about · ${base}/hk/about`,
+    `- Privacy: ${base}/en/privacy · ${base}/hk/privacy`,
+    `- Terms: ${base}/en/terms · ${base}/hk/terms`,
+    `- Source code: ${GITHUB_URL}`,
     `- Places: ${base}/en/place/{slug} and ${base}/hk/place/{slug}`,
     `- Events: ${base}/en/event/{slug} and ${base}/hk/event/{slug}`,
     `- Sitemap: ${base}/sitemap.xml`,

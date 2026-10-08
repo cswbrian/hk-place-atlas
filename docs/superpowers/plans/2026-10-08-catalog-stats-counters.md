@@ -76,4 +76,4 @@
 ### Task 6: Verify
 
 - [x] **Step 1:** `npx vitest run`
-- [ ] **Step 2:** `npm run migrate:remote` + deploy when ready (awaiting user)
+- [x] **Step 2:** `npm run migrate:remote` + deploy

@@ -252,15 +252,7 @@ export function AtlasMap({
         source: 'catalog',
         filter: ['!', ['has', 'point_count']],
         paint: {
-          'circle-color': [
-            'match',
-            ['get', 'status'],
-            'standing',
-            '#1f6b4a',
-            'demolished',
-            '#9a3412',
-            '#57534e',
-          ],
+          'circle-color': '#111111',
           'circle-radius': 6,
           'circle-stroke-width': 1,
           'circle-stroke-color': '#ffffff',

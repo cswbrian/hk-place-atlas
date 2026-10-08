@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { fetchSearch } from '../api/features'
 import { deletePhotoTag, originalPath, savePhotoTag, updatePhoto } from '../api/photos'
@@ -118,6 +118,27 @@ export function PhotoLightbox({
   const [metaSaved, setMetaSaved] = useState(false)
   const [metaPending, setMetaPending] = useState(false)
   const [editingMeta, setEditingMeta] = useState(false)
+  const [cursorHint, setCursorHint] = useState<{ left: number; top: number } | null>(null)
+  const cursorHintRef = useRef<HTMLDivElement>(null)
+
+  function placeCursorHint(event: ReactMouseEvent<HTMLElement>) {
+    if (draft) {
+      setCursorHint(null)
+      return
+    }
+    const gap = 14
+    const pad = 8
+    const tip = cursorHintRef.current
+    const width = tip?.offsetWidth || 200
+    const height = tip?.offsetHeight || 36
+    let left = event.clientX + gap
+    let top = event.clientY + gap
+    if (left + width > window.innerWidth - pad) left = event.clientX - width - gap
+    if (top + height > window.innerHeight - pad) top = event.clientY - height - gap
+    if (left < pad) left = pad
+    if (top < pad) top = pad
+    setCursorHint({ left, top })
+  }
 
   const needsLocate = Boolean(
     placeFeatureId &&
@@ -132,6 +153,7 @@ export function PhotoLightbox({
     setError(null)
     setMetaError(null)
     setMetaSaved(false)
+    setCursorHint(null)
     const current = photos[index]
     const incomplete = Boolean(
       current && userSub && userSub === current.createdBy && !photoMetaComplete(current),
@@ -413,7 +435,11 @@ export function PhotoLightbox({
       <div className="lightbox-body">
         <div className="lightbox-main">
           <div className="lightbox-stage">
-            <div className="lightbox-photo">
+            <div
+              className="lightbox-photo"
+              onMouseMove={placeCursorHint}
+              onMouseLeave={() => setCursorHint(null)}
+            >
               <img
                 src={originalPath(photo.id)}
                 alt={photo.caption || photo.source}
@@ -427,6 +453,7 @@ export function PhotoLightbox({
                   if (!point) return
                   setError(null)
                   setResults([])
+                  setCursorHint(null)
                   if (!signedIn) {
                     setDraft({ ...point, query: '' })
                     return
@@ -438,6 +465,21 @@ export function PhotoLightbox({
                   setDraft({ ...point, query: '' })
                 }}
               />
+              {!draft ? (
+                <div
+                  ref={cursorHintRef}
+                  className={`lightbox-cursor-hint${cursorHint ? ' is-visible' : ''}`}
+                  style={
+                    cursorHint
+                      ? { left: cursorHint.left, top: cursorHint.top }
+                      : { left: -9999, top: -9999 }
+                  }
+                  aria-hidden="true"
+                >
+                  <p>{needsLocate ? text.locatePlaceHint : text.tagHint}</p>
+                  {needsLocate ? <p>{placeName}</p> : null}
+                </div>
+              ) : null}
               {showTags
                 ? (photo.tags ?? []).map((tag) => {
                     const name = displayNames(tag, locale).title
@@ -539,9 +581,11 @@ export function PhotoLightbox({
               ) : null}
             </div>
           </div>
-          <div className="lightbox-caption">
-            <p className="lightbox-hint">{needsLocate ? text.locatePlaceHint : text.tagHint}</p>
-            {needsLocate ? <p className="lightbox-hint">{placeName}</p> : null}
+          <div className={`lightbox-caption${error ? ' has-error' : ''}`}>
+            <div className="lightbox-caption-static">
+              <p className="lightbox-hint">{needsLocate ? text.locatePlaceHint : text.tagHint}</p>
+              {needsLocate ? <p className="lightbox-hint">{placeName}</p> : null}
+            </div>
             {error ? <p className="error">{error}</p> : null}
           </div>
         </div>

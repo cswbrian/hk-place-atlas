@@ -14,6 +14,7 @@ import {
   homeSeoHead,
   hreflangLinks,
   injectSeoHead,
+  legalSeoHead,
   llmsTxt,
   parseSeoPath,
   parseSitemapPath,
@@ -185,6 +186,35 @@ describe('aboutSeoHead', () => {
     expect(zh.crawlerBody).toContain('社群協作的城市歷史地圖目錄')
     expect(zh.crawlerBody).toContain('你可以：')
   })
+
+  it('links privacy, terms, and GitHub from the About crawler body', () => {
+    const en = aboutSeoHead('https://hkatlas.fyi', 'en')
+    expect(en.crawlerBody).toContain('href="/en/privacy"')
+    expect(en.crawlerBody).toContain('href="/en/terms"')
+    expect(en.crawlerBody).toContain('href="https://github.com/cswbrian/hk-place-atlas"')
+  })
+})
+
+describe('legal pages', () => {
+  it('parses privacy and terms paths', () => {
+    expect(parseSeoPath('/en/privacy')).toEqual({ type: 'legal', page: 'privacy', locale: 'en' })
+    expect(parseSeoPath('/hk/terms')).toEqual({ type: 'legal', page: 'terms', locale: 'hk' })
+    expect(parseSeoPath('/en/terms/extra')).toBeNull()
+  })
+
+  it('builds indexable heads with the policy text in the crawler body', () => {
+    const en = legalSeoHead('https://hkatlas.fyi', 'en', 'privacy')
+    expect(en.title).toBe('Privacy Policy · HONG KONG ATLAS')
+    expect(en.canonical).toBe('https://hkatlas.fyi/en/privacy')
+    expect(en.robots).toBe('index,follow')
+    expect(en.alternates).toContainEqual({ hreflang: 'zh-Hant', href: 'https://hkatlas.fyi/hk/privacy' })
+    expect(en.crawlerBody).toContain('<h1>Privacy Policy</h1>')
+    expect(en.crawlerBody).toContain('info@monsoonclub.co')
+
+    const zh = legalSeoHead('https://hkatlas.fyi', 'hk', 'terms')
+    expect(zh.title).toBe('條款及細則 · 香港地圖集')
+    expect(zh.crawlerBody).toContain('<h1>條款及細則</h1>')
+  })
 })
 
 describe('featureSeoHead', () => {
@@ -275,6 +305,8 @@ describe('sitemapXml', () => {
     expect(xml.indexOf('https://hkatlas.fyi/hk</loc>')).toBeLessThan(xml.indexOf('https://hkatlas.fyi/en</loc>'))
     expect(xml).toContain('<loc>https://hkatlas.fyi/en/about</loc>')
     expect(xml).toContain('<loc>https://hkatlas.fyi/hk/about</loc>')
+    expect(xml).toContain('<loc>https://hkatlas.fyi/en/privacy</loc>')
+    expect(xml).toContain('<loc>https://hkatlas.fyi/hk/terms</loc>')
     expect(xml).not.toContain('/places')
     expect(xml).not.toContain('/zh-hk')
     expect(xml).toContain('<loc>https://hkatlas.fyi/en/place/cafe-1990</loc>')

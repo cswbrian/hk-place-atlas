@@ -1,6 +1,12 @@
+import { useEffect, useState } from 'react'
 import type { Feature, FeatureStatus } from '../domain/feature'
 import { copy, type SiteLocale } from '../domain/locale'
 import type { FeatureWrite } from '../domain/wiki'
+
+export const FEATURE_YEAR_MIN = 1700
+export const FEATURE_YEAR_MAX = 2100
+
+export type WikiDraftIssue = 'year' | 'yearOrder' | 'standingEnd'
 
 export type WikiDraft = {
   kind: 'establishment' | 'shop' | 'event'
@@ -21,11 +27,59 @@ export type WikiDraft = {
 }
 
 const KINDS: WikiDraft['kind'][] = ['establishment', 'shop', 'event']
-const STATUSES: FeatureStatus[] = ['standing', 'demolished', 'unknown']
+const KIND_ENABLED: Record<WikiDraft['kind'], boolean> = {
+  establishment: true,
+  shop: false,
+  event: false,
+}
+const STATUSES: FeatureStatus[] = ['standing', 'demolished']
+
+function formStatus(status: FeatureStatus): 'standing' | 'demolished' {
+  return status === 'demolished' ? 'demolished' : 'standing'
+}
+
+/** Entering a demolition year marks the place demolished right away. */
+export function withEndYear(draft: WikiDraft, endYear: string): WikiDraft {
+  if (!endYear.trim()) return { ...draft, endYear }
+  return { ...draft, endYear, status: 'demolished' }
+}
+
+/** Choosing standing clears any demolition year. */
+export function withStatus(draft: WikiDraft, status: 'standing' | 'demolished'): WikiDraft {
+  if (status === 'standing') {
+    return { ...draft, status, endYear: '', endMonth: '', endDay: '', endCirca: false }
+  }
+  return { ...draft, status }
+}
+
+function parseYearField(value: string): number | null | 'invalid' {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (!/^\d+$/.test(trimmed)) return 'invalid'
+  const n = Number(trimmed)
+  if (!Number.isInteger(n) || n < FEATURE_YEAR_MIN || n > FEATURE_YEAR_MAX) return 'invalid'
+  return n
+}
+
+export function wikiDraftIssues(draft: WikiDraft): WikiDraftIssue[] {
+  const issues: WikiDraftIssue[] = []
+  const start = parseYearField(draft.startYear)
+  const end = parseYearField(draft.endYear)
+  if (start === 'invalid' || end === 'invalid') issues.push('year')
+  if (typeof start === 'number' && typeof end === 'number' && end < start) issues.push('yearOrder')
+  if (formStatus(draft.status) === 'standing' && draft.endYear.trim()) issues.push('standingEnd')
+  return issues
+}
+
+function issueMessage(text: (typeof copy)[SiteLocale], issue: WikiDraftIssue): string {
+  if (issue === 'yearOrder') return text.placeYearOrder
+  if (issue === 'standingEnd') return text.placeStandingEnd
+  return text.placeYearInvalid
+}
 
 function yearPart(value: string): number | undefined {
-  const n = Number(value)
-  return Number.isInteger(n) && n > 0 ? n : undefined
+  const parsed = parseYearField(value)
+  return typeof parsed === 'number' ? parsed : undefined
 }
 
 export function emptyWikiDraft(lng: number | null, lat: number | null): WikiDraft {
@@ -76,7 +130,7 @@ export function wikiDraftToWrite(draft: WikiDraft): FeatureWrite {
     kind: draft.kind,
     nameEn: draft.nameEn,
     nameZh: draft.nameZh,
-    status: draft.status,
+    status: formStatus(draft.status),
     start: startYear
       ? {
           year: startYear,
@@ -118,25 +172,72 @@ type Props = {
 
 export function FeatureForm({ locale, draft, creating, error, onChange, onSave, onCancel, onDelete }: Props) {
   const text = copy[locale]
+  const [localError, setLocalError] = useState<string | null>(null)
+  useEffect(() => {
+    setLocalError(null)
+  }, [draft])
+  const shownError = localError ?? error
+  const dismissLabel = creating ? text.close : text.cancel
   return (
     <form
       className="panel-form"
       onSubmit={(event) => {
         event.preventDefault()
+        const issue = wikiDraftIssues(draft)[0]
+        if (issue) {
+          setLocalError(issueMessage(text, issue))
+          return
+        }
+        setLocalError(null)
         onSave()
       }}
     >
+      <button
+        type="button"
+        className="ghost detail-back"
+        aria-label={dismissLabel}
+        title={dismissLabel}
+        onClick={onCancel}
+      >
+        {creating ? (
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6 6l12 12M18 6L6 18"
+            />
+          </svg>
+        ) : (
+          <svg viewBox="4.2 5.2 15.6 13.6" width="20" height="18" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M19 12H5M11 6l-6 6 6 6"
+            />
+          </svg>
+        )}
+      </button>
       <h2>{creating ? text.add : text.edit}</h2>
       {creating ? (
         <label>
           {text.kind}
           <select
-            value={draft.kind}
-            onChange={(event) => onChange({ ...draft, kind: event.target.value as WikiDraft['kind'] })}
+            value={KIND_ENABLED[draft.kind] ? draft.kind : 'establishment'}
+            onChange={(event) => {
+              const kind = event.target.value as WikiDraft['kind']
+              if (!KIND_ENABLED[kind]) return
+              onChange({ ...draft, kind })
+            }}
           >
             {KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {text[kind]}
+              <option key={kind} value={kind} disabled={!KIND_ENABLED[kind]}>
+                {KIND_ENABLED[kind] ? text[kind] : `${text[kind]}${text.comingSoon}`}
               </option>
             ))}
           </select>
@@ -152,19 +253,23 @@ export function FeatureForm({ locale, draft, creating, error, onChange, onSave, 
         {text.nameZh}
         <input value={draft.nameZh} onChange={(event) => onChange({ ...draft, nameZh: event.target.value })} />
       </label>
-      <label>
-        {text.status}
-        <select
-          value={draft.status}
-          onChange={(event) => onChange({ ...draft, status: event.target.value as FeatureStatus })}
-        >
+      <fieldset className="status-field">
+        <legend>{text.status}</legend>
+        <div className="status-options">
           {STATUSES.map((status) => (
-            <option key={status} value={status}>
+            <label key={status} className="check">
+              <input
+                type="radio"
+                name="status"
+                value={status}
+                checked={formStatus(draft.status) === status}
+                onChange={() => onChange(withStatus(draft, status))}
+              />
               {text[status]}
-            </option>
+            </label>
           ))}
-        </select>
-      </label>
+        </div>
+      </fieldset>
       <div className="date-row">
         <div>
           <label>
@@ -183,7 +288,11 @@ export function FeatureForm({ locale, draft, creating, error, onChange, onSave, 
         <div>
           <label>
             {text.end}
-            <input value={draft.endYear} onChange={(event) => onChange({ ...draft, endYear: event.target.value })} placeholder={text.year} />
+            <input
+              value={draft.endYear}
+              onChange={(event) => onChange(withEndYear(draft, event.target.value))}
+              placeholder={text.year}
+            />
           </label>
           <label className="check">
             <input
@@ -204,16 +313,13 @@ export function FeatureForm({ locale, draft, creating, error, onChange, onSave, 
           ? `${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}`
           : text.clickMap}
       </p>
-      {error ? <p className="error">{error}</p> : null}
-      <div className="row">
+      {shownError ? <p className="error">{shownError}</p> : null}
+      <div className="row form-actions">
         <button type="submit" className="primary">
           {text.save}
         </button>
-        <button type="button" className="ghost" onClick={onCancel}>
-          {text.cancel}
-        </button>
         {onDelete ? (
-          <button type="button" onClick={onDelete}>
+          <button type="button" className="linkish form-delete" onClick={onDelete}>
             {text.delete}
           </button>
         ) : null}

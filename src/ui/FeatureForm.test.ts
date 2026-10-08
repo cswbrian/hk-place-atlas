@@ -1,7 +1,14 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { emptyWikiDraft, FeatureForm, wikiDraftFromFeature, wikiDraftToWrite } from './FeatureForm'
+import {
+  emptyWikiDraft,
+  FeatureForm,
+  wikiDraftFromFeature,
+  wikiDraftIssues,
+  wikiDraftToWrite,
+  withEndYear,
+} from './FeatureForm'
 import type { Feature } from '../domain/feature'
 
 describe('wikiDraftToWrite', () => {
@@ -39,7 +46,88 @@ describe('wikiDraftToWrite', () => {
   })
 })
 
+describe('withEndYear', () => {
+  it('sets status to demolished as soon as a demolition year is entered', () => {
+    const draft = { ...emptyWikiDraft(null, null), status: 'standing' as const }
+    expect(withEndYear(draft, '1979').status).toBe('demolished')
+    expect(withEndYear(draft, '1979').endYear).toBe('1979')
+  })
+
+  it('does not change status when the demolition year is cleared', () => {
+    const draft = {
+      ...emptyWikiDraft(null, null),
+      status: 'demolished' as const,
+      endYear: '1979',
+    }
+    expect(withEndYear(draft, '').status).toBe('demolished')
+    expect(withEndYear(draft, '').endYear).toBe('')
+  })
+})
+
+describe('wikiDraftIssues', () => {
+  it('accepts empty years and demolished without an end year', () => {
+    expect(wikiDraftIssues(emptyWikiDraft(null, null))).toEqual([])
+    expect(
+      wikiDraftIssues({
+        ...emptyWikiDraft(null, null),
+        status: 'demolished',
+        startYear: '1980',
+      }),
+    ).toEqual([])
+  })
+
+  it('requires years in 1700–2100 when filled', () => {
+    expect(wikiDraftIssues({ ...emptyWikiDraft(null, null), startYear: '1699' })).toEqual(['year'])
+    expect(wikiDraftIssues({ ...emptyWikiDraft(null, null), startYear: '1700' })).toEqual([])
+    expect(wikiDraftIssues({ ...emptyWikiDraft(null, null), endYear: '2101', status: 'demolished' })).toEqual([
+      'year',
+    ])
+    expect(wikiDraftIssues({ ...emptyWikiDraft(null, null), startYear: 'abc' })).toEqual(['year'])
+  })
+
+  it('rejects a demolished year before the built year', () => {
+    expect(
+      wikiDraftIssues({
+        ...emptyWikiDraft(null, null),
+        status: 'demolished',
+        startYear: '1980',
+        endYear: '1979',
+      }),
+    ).toEqual(['yearOrder'])
+  })
+
+  it('rejects a standing place that still has a demolition year', () => {
+    expect(
+      wikiDraftIssues({
+        ...emptyWikiDraft(null, null),
+        status: 'standing',
+        endYear: '1979',
+      }),
+    ).toEqual(['standingEnd'])
+  })
+})
+
 describe('FeatureForm labels', () => {
+  it('only enables building kind and marks the rest as coming soon', () => {
+    const html = renderToStaticMarkup(
+      createElement(FeatureForm, {
+        locale: 'hk',
+        draft: emptyWikiDraft(null, null),
+        creating: true,
+        error: null,
+        onChange: () => {},
+        onSave: () => {},
+        onCancel: () => {},
+      }),
+    )
+    expect(html).toContain('建築物')
+    expect(html).toContain('店舖（稍後推出）')
+    expect(html).toContain('事件（稍後推出）')
+    expect(html).toMatch(/value="shop"[^>]*disabled/)
+    expect(html).toMatch(/value="event"[^>]*disabled/)
+    expect(html).not.toMatch(/value="establishment"[^>]*disabled/)
+  })
+
   it('uses Traditional Chinese for status and dates on the hk site', () => {
     const html = renderToStaticMarkup(
       createElement(FeatureForm, {
@@ -55,7 +143,8 @@ describe('FeatureForm labels', () => {
     expect(html).toContain('狀態')
     expect(html).toContain('現存')
     expect(html).toContain('已拆卸')
-    expect(html).toContain('不詳')
+    expect(html).not.toContain('不詳')
+    expect(html).toContain('type="radio"')
     expect(html).toContain('落成')
     expect(html).toMatch(/拆卸\s*<input/)
     expect(html).toContain('placeholder="年份"')

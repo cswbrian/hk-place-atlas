@@ -38,6 +38,8 @@ import { trackPageview } from './domain/analytics'
 import { districtBbox } from './domain/districtView'
 import { shouldLoadRecent, type RecentItem } from './domain/recent'
 import { AboutPage } from './ui/AboutPage'
+import { LegalPage } from './ui/LegalPage'
+import { legal, parseLegalPage } from './domain/legal'
 import { AtlasMap } from './ui/AtlasMap'
 import { MapRegionChips } from './ui/MapRegionChips'
 import { FeatureForm, emptyWikiDraft, wikiDraftFromFeature, wikiDraftToWrite, type WikiDraft } from './ui/FeatureForm'
@@ -157,6 +159,7 @@ function AtlasApp() {
 
   const { locale, rest } = parseLocalePath(path)
   const featurePath = parseFeaturePath(rest)
+  const legalPage = parseLegalPage(rest)
   const text = copy[locale]
   const otherLocale: SiteLocale = locale === 'en' ? 'hk' : 'en'
   const visible = useMemo(() => mergeOverlay(catalog, overlay), [catalog, overlay])
@@ -248,12 +251,14 @@ function AtlasApp() {
     document.title =
       rest === '/about'
         ? text.aboutSeoTitle
-        : selected
+        : legalPage
+          ? legal[locale][legalPage].seoTitle
+          : selected
           ? `${displayNames(selected, locale).title} · ${text.title}`
           : rest === '/'
             ? text.seoTitle
             : text.title
-  }, [path, locale, rest, text.title, text.seoTitle, text.aboutSeoTitle, selected, search])
+  }, [path, locale, rest, legalPage, text.title, text.seoTitle, text.aboutSeoTitle, selected, search])
 
   useEffect(() => {
     const onPop = () => {
@@ -464,7 +469,7 @@ function AtlasApp() {
 
   return (
     <div className="app">
-      {rest === '/about' ? (
+      {rest === '/about' || legalPage ? (
         <a className="skip-link" href="#about-page">
           Skip to content
         </a>
@@ -541,10 +546,7 @@ function AtlasApp() {
                 </button>
               ) : null}
               {user ? (
-                <span className="atlas-user">
-                  {user.email}
-                  <a href={`/api/auth/logout?return=${encodeURIComponent(path + search)}`}>{text.signOut}</a>
-                </span>
+                <a href={`/api/auth/logout?return=${encodeURIComponent(path + search)}`}>{text.signOut}</a>
               ) : null}
             </nav>
           </div>
@@ -557,7 +559,10 @@ function AtlasApp() {
           authEnabled={Boolean(auth)}
           onBack={() => go(`/${locale}`)}
           onSignIn={() => setSignInIntent('edit')}
+          onNavigate={go}
         />
+      ) : legalPage ? (
+        <LegalPage locale={locale} page={legalPage} onAbout={() => go(`/${locale}/about`)} />
       ) : (
         <>
           <div className="workspace">
