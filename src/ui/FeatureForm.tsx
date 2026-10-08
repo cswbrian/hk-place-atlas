@@ -32,7 +32,7 @@ const KIND_ENABLED: Record<WikiDraft['kind'], boolean> = {
   shop: false,
   event: false,
 }
-const STATUSES: FeatureStatus[] = ['standing', 'demolished']
+const STATUSES = ['standing', 'demolished'] as const
 
 function formStatus(status: FeatureStatus): 'standing' | 'demolished' {
   return status === 'demolished' ? 'demolished' : 'standing'
