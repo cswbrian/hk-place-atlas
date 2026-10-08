@@ -141,6 +141,12 @@ export const copy = {
     parcels: 'Parcels',
     sources: 'Sources',
     images: 'Images',
+    historyMap: 'History map',
+    historyMapOpacity: 'Opacity',
+    historyMapCentral1938: 'Central 1938',
+    historyMapVictoria1889: 'Victoria 1889',
+    historyMapVictoria1897: 'Victoria 1897',
+    historyMapAttribution: 'Historical map: Lands Department',
   },
   hk: {
     title: '香港地圖集',
@@ -266,6 +272,12 @@ export const copy = {
     parcels: '地段',
     sources: '來源',
     images: '圖片',
+    historyMap: '歷史地圖',
+    historyMapOpacity: '透明度',
+    historyMapCentral1938: '中環 1938',
+    historyMapVictoria1889: '維多利亞城 1889',
+    historyMapVictoria1897: '維多利亞 1897',
+    historyMapAttribution: '歷史地圖：地政總署',
   },
 } as const
 

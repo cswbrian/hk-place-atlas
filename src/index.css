@@ -1048,6 +1048,68 @@ input[type='radio']:focus-visible {
   box-shadow: none;
 }
 
+.history-map-control {
+  position: absolute;
+  top: 10px;
+  right: 50px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: min(220px, calc(100% - 70px));
+}
+
+.history-map-toggle {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: var(--panel, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.history-map-toggle.is-on {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.history-map-panel {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--panel, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.history-map-sheets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-map-sheet {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.history-map-opacity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-map-opacity input {
+  width: 100%;
+}
+
 .photo-list {
   list-style: none;
   margin: 0;

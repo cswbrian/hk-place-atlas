@@ -37,7 +37,13 @@ import { shouldLoadRecent, type RecentItem } from './domain/recent'
 import { AboutPage } from './ui/AboutPage'
 import { LegalPage } from './ui/LegalPage'
 import { legal, parseLegalPage } from './domain/legal'
+import {
+  DEFAULT_HISTORY_MAP_ID,
+  DEFAULT_HISTORY_OPACITY,
+  type HistoryMapId,
+} from './domain/historyMap'
 import { AtlasMap } from './ui/AtlasMap'
+import { HistoryMapControl } from './ui/HistoryMapControl'
 import { MapRegionChips } from './ui/MapRegionChips'
 import { FeatureForm, emptyWikiDraft, wikiDraftFromFeature, wikiDraftToWrite, type WikiDraft } from './ui/FeatureForm'
 import { FeaturePanel } from './ui/FeaturePanel'
@@ -115,6 +121,8 @@ function AtlasApp() {
   const [recent, setRecent] = useState<RecentItem[]>([])
   const [counts, setCounts] = useState<{ places: number; photos: number } | null>(null)
   const [mapPhotos, setMapPhotos] = useState<PhotoPin[]>([])
+  const [historyMapId, setHistoryMapId] = useState<HistoryMapId | null>(null)
+  const [historyOpacity, setHistoryOpacity] = useState(DEFAULT_HISTORY_OPACITY)
   const siteRef = useRef<SiteQueryResult | null>(null)
   const bboxRef = useRef<Bbox | null>(null)
   const selectedRef = useRef<Feature | null>(null)
@@ -548,9 +556,20 @@ function AtlasApp() {
                 buildings={site?.buildings ?? []}
                 lots={site?.lots ?? []}
                 photos={mapPhotos}
+                historyMapId={historyMapId}
+                historyOpacity={historyOpacity}
+                historyAttribution={text.historyMapAttribution}
                 onPointClick={openPoint}
                 onPhotoClick={openPhoto}
                 onView={loadMapPhotos}
+              />
+              <HistoryMapControl
+                locale={locale}
+                historyMapId={historyMapId}
+                opacity={historyOpacity}
+                onToggle={(on) => setHistoryMapId(on ? (historyMapId ?? DEFAULT_HISTORY_MAP_ID) : null)}
+                onSelect={setHistoryMapId}
+                onOpacity={setHistoryOpacity}
               />
               <MapRegionChips
                 locale={locale}
