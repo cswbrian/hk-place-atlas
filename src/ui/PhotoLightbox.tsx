@@ -18,6 +18,7 @@ import {
   photoDraftAllowsPaging,
   photoDraftCanFinish,
   photoDraftCloseKind,
+  photoDraftShouldPersistMeta,
 } from '../domain/photoUploadSession'
 import { fts5Query, hanNeedle } from '../domain/search'
 
@@ -274,8 +275,7 @@ export function PhotoLightbox({
     }
   }
 
-  async function saveMeta(event: FormEvent) {
-    event.preventDefault()
+  async function saveMeta() {
     const issues = photoMetaIssues({
       source,
       caption,
@@ -320,6 +320,50 @@ export function PhotoLightbox({
     }
   }
 
+  async function finishDraft() {
+    if (!canFinishDraft || !photo) return
+    const payload = { source, caption, photographer, license, sourceUrl, year, circa }
+    if (!photoDraftShouldPersistMeta(payload)) {
+      const issue = photoMetaIssues(payload)[0]
+      if (issue) setMetaError(metaMessage(issue, text))
+      setMetaSaved(false)
+      onDone?.()
+      return
+    }
+    const taken = normalizePhotoTaken({ year, circa })
+    if ('error' in taken) return
+    setMetaPending(true)
+    setMetaError(null)
+    setMetaSaved(false)
+    try {
+      const saved = await updatePhoto({
+        id: photo.id,
+        source,
+        caption,
+        photographer,
+        license,
+        year: taken.year,
+        circa: taken.circa,
+        sourceUrl,
+      })
+      onPhotoUpdate({ ...saved, tags: photo.tags ?? saved.tags ?? [] })
+      onDone?.()
+    } catch (err) {
+      setMetaError(metaMessage(err instanceof Error ? err.message : '', text))
+    } finally {
+      setMetaPending(false)
+    }
+  }
+
+  async function onMetaSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (draftSession) {
+      await finishDraft()
+      return
+    }
+    await saveMeta()
+  }
+
   function cancelMeta() {
     setSource(photo.source)
     setCaption(photo.caption)
@@ -342,6 +386,10 @@ export function PhotoLightbox({
   )
   const showShortHint = Boolean(draft && signedIn && !needsLocate && query && !searchable)
   const takenLabel = formatPhotoTaken(photo.year, photo.circa)
+  const draftMetaIssue = draftSession
+    ? photoMetaIssues({ source, caption, photographer, license, sourceUrl, year, circa })[0]
+    : undefined
+  const shownMetaError = metaError ?? (draftMetaIssue ? metaMessage(draftMetaIssue, text) : null)
 
   return createPortal(
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={photo.source || text.photos}>
@@ -399,20 +447,6 @@ export function PhotoLightbox({
         >
           {showTags ? text.hideTags : text.showTags}
         </button>
-        {draftSession ? (
-          <button
-            type="button"
-            className="primary"
-            disabled={!canFinishDraft}
-            title={canFinishDraft ? undefined : text.locatePlaceHint}
-            onClick={() => {
-              if (!canFinishDraft) return
-              onDone?.()
-            }}
-          >
-            {text.photoDone}
-          </button>
-        ) : null}
         <button
           type="button"
           className="lightbox-icon"
@@ -607,10 +641,14 @@ export function PhotoLightbox({
             ) : null}
           </div>
           {canEditMeta && editingMeta ? (
-            <form className="lightbox-meta" onSubmit={(event) => void saveMeta(event)}>
+            <form className="lightbox-meta" onSubmit={(event) => void onMetaSubmit(event)}>
               <label>
                 {text.photoSource}
-                <input value={source} onChange={(event) => setSource(event.target.value)} required />
+                <input
+                  value={source}
+                  onChange={(event) => setSource(event.target.value)}
+                  required={!draftSession}
+                />
               </label>
               <label>
                 {text.photoCaption}
@@ -653,13 +691,18 @@ export function PhotoLightbox({
                   value={sourceUrl}
                   onChange={(event) => setSourceUrl(event.target.value)}
                   placeholder="https://"
-                  required
+                  required={!draftSession}
                 />
               </label>
-              {metaError ? <p className="error">{metaError}</p> : null}
+              {shownMetaError ? <p className="error">{shownMetaError}</p> : null}
               <div className="row">
-                <button type="submit" className="primary" disabled={metaPending}>
-                  {text.save}
+                <button
+                  type="submit"
+                  className="primary"
+                  disabled={metaPending || (draftSession && !canFinishDraft)}
+                  title={draftSession && !canFinishDraft ? text.locatePlaceHint : undefined}
+                >
+                  {draftSession ? text.photoDone : text.save}
                 </button>
                 <button type="button" className="ghost" onClick={cancelMeta} disabled={metaPending}>
                   {text.cancel}
