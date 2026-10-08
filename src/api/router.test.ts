@@ -55,6 +55,9 @@ describe('parseApiRoute', () => {
     expect(parseApiRoute(new URL('https://x/api/gis/parcel-search?kind=lot&q=IL'))).toEqual({
       type: 'gisParcelSearch',
     })
+    expect(parseApiRoute(new URL('https://x/api/links/preview?url=https://example.com'))).toEqual({
+      type: 'linkPreview',
+    })
     expect(parseApiRoute(new URL('https://x/api/photos?featureId=bdbiar-1'))).toEqual({ type: 'photos' })
     expect(parseApiRoute(new URL('https://x/api/photos/pic-1'))).toEqual({ type: 'photo', id: 'pic-1' })
     expect(parseApiRoute(new URL('https://x/api/photos/pic-1/thumb?size=map'))).toEqual({
@@ -74,6 +77,24 @@ describe('parseApiRoute', () => {
       id: 'pic-1',
       tagId: 'tag-1',
     })
+  })
+
+  it('matches historical map tile paths', () => {
+    expect(
+      parseApiRoute(new URL('https://x/api/history-map/central-1938/17/104856/57012.png')),
+    ).toEqual({
+      type: 'historyMap',
+      id: 'central-1938',
+      z: 17,
+      x: 104856,
+      y: 57012,
+    })
+  })
+
+  it('rejects unknown history map ids and bad zoom', () => {
+    expect(parseApiRoute(new URL('https://x/api/history-map/kowloon/17/1/1.png'))).toBeNull()
+    expect(parseApiRoute(new URL('https://x/api/history-map/central-1938/8/1/1.png'))).toBeNull()
+    expect(parseApiRoute(new URL('https://x/api/history-map/central-1938/20/1/1.png'))).toBeNull()
   })
 
   it('ignores unknown paths', () => {

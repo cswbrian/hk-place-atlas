@@ -1,3 +1,10 @@
+import {
+  HISTORY_MAP_MAX_Z,
+  HISTORY_MAP_MIN_Z,
+  isHistoryMapId,
+  type HistoryMapId,
+} from '../domain/historyMap'
+
 export type ApiRoute =
   | { type: 'feature'; slug: string }
   | { type: 'list' }
@@ -21,12 +28,15 @@ export type ApiRoute =
   | { type: 'photoTags'; id: string }
   | { type: 'photoTag'; id: string; tagId: string }
   | { type: 'counts' }
+  | { type: 'linkPreview' }
+  | { type: 'historyMap'; id: HistoryMapId; z: number; x: number; y: number }
 
 export function parseApiRoute(url: URL): ApiRoute | null {
   const path = url.pathname.replace(/\/$/, '') || '/'
   if (path === '/api/features') return { type: 'list' }
   if (path === '/api/recent') return { type: 'recent' }
   if (path === '/api/counts') return { type: 'counts' }
+  if (path === '/api/links/preview') return { type: 'linkPreview' }
   const feature = /^\/api\/features\/([^/]+)$/.exec(path)
   if (feature) return { type: 'feature', slug: decodeURIComponent(feature[1]!) }
   if (path === '/api/edges') {
@@ -67,5 +77,16 @@ export function parseApiRoute(url: URL): ApiRoute | null {
   if (path === '/api/gis/buildings') return { type: 'gisBuildings' }
   if (path === '/api/gis/parcels') return { type: 'gisParcels' }
   if (path === '/api/gis/parcel-search') return { type: 'gisParcelSearch' }
+  const historyMap = /^\/api\/history-map\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(path)
+  if (historyMap) {
+    const id = historyMap[1]!
+    const z = Number(historyMap[2])
+    const x = Number(historyMap[3])
+    const y = Number(historyMap[4])
+    if (!isHistoryMapId(id)) return null
+    if (!Number.isInteger(z) || z < HISTORY_MAP_MIN_Z || z > HISTORY_MAP_MAX_Z) return null
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0) return null
+    return { type: 'historyMap', id, z, x, y }
+  }
   return null
 }
