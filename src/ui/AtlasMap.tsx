@@ -13,6 +13,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import type { CatalogGeojson } from '../domain/catalog'
 import type { Bbox } from '../domain/featureQuery'
+import { historyMapTileTemplate, type HistoryMapId } from '../domain/historyMap'
 import type { SiteLocale } from '../domain/locale'
 import { mapThumbs, thumbPath, type PhotoPin } from '../domain/photo'
 import type { BuildingSnapshot, LotSnapshot } from '../domain/types'
@@ -25,6 +26,72 @@ import {
   mergeLandsDepartmentLabels,
 } from './basemap'
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
+
+const HISTORY_SOURCE = 'history-map'
+const HISTORY_LAYER = 'history-map-raster'
+
+function historyBeforeId(map: MapLibreMap): string | undefined {
+  if (map.getLayer('gis-lots-fill')) return 'gis-lots-fill'
+  if (map.getLayer('clusters')) return 'clusters'
+  return undefined
+}
+
+function syncHistoryMap(
+  map: MapLibreMap,
+  id: HistoryMapId | null,
+  opacity: number,
+  attribution: string,
+): void {
+  if (!id) {
+    if (map.getLayer(HISTORY_LAYER)) map.removeLayer(HISTORY_LAYER)
+    if (map.getSource(HISTORY_SOURCE)) map.removeSource(HISTORY_SOURCE)
+    return
+  }
+  const tiles = [historyMapTileTemplate(id)]
+  const beforeId = historyBeforeId(map)
+  const existing = map.getSource(HISTORY_SOURCE) as { tiles?: string[] } | undefined
+  if (!existing) {
+    map.addSource(HISTORY_SOURCE, {
+      type: 'raster',
+      tiles,
+      tileSize: 256,
+      attribution,
+    })
+    map.addLayer(
+      {
+        id: HISTORY_LAYER,
+        type: 'raster',
+        source: HISTORY_SOURCE,
+        paint: { 'raster-opacity': opacity },
+      },
+      beforeId,
+    )
+    return
+  }
+  if (existing.tiles?.[0] !== tiles[0]) {
+    if (map.getLayer(HISTORY_LAYER)) map.removeLayer(HISTORY_LAYER)
+    map.removeSource(HISTORY_SOURCE)
+    map.addSource(HISTORY_SOURCE, {
+      type: 'raster',
+      tiles,
+      tileSize: 256,
+      attribution,
+    })
+    map.addLayer(
+      {
+        id: HISTORY_LAYER,
+        type: 'raster',
+        source: HISTORY_SOURCE,
+        paint: { 'raster-opacity': opacity },
+      },
+      beforeId,
+    )
+    return
+  }
+  if (map.getLayer(HISTORY_LAYER)) {
+    map.setPaintProperty(HISTORY_LAYER, 'raster-opacity', opacity)
+  }
+}
 
 setWorkerUrl(workerUrl)
 
@@ -42,6 +109,9 @@ type Props = {
   buildings: BuildingSnapshot[]
   lots: LotSnapshot[]
   photos: PhotoPin[]
+  historyMapId: HistoryMapId | null
+  historyOpacity: number
+  historyAttribution: string
   onPointClick: (lng: number, lat: number, bbox: Bbox, hitId: string | null) => void
   onPhotoClick: (featureId: string) => void
   onView: (bbox: Bbox, zoom: number) => void
@@ -79,6 +149,9 @@ export function AtlasMap({
   buildings,
   lots,
   photos,
+  historyMapId,
+  historyOpacity,
+  historyAttribution,
   onPointClick,
   onPhotoClick,
   onView,
@@ -90,6 +163,9 @@ export function AtlasMap({
   const buildingsRef = useRef(buildings)
   const lotsRef = useRef(lots)
   const photosRef = useRef(photos)
+  const historyMapIdRef = useRef(historyMapId)
+  const historyOpacityRef = useRef(historyOpacity)
+  const historyAttributionRef = useRef(historyAttribution)
   const onPoint = useRef(onPointClick)
   const onPhoto = useRef(onPhotoClick)
   const onViewRef = useRef(onView)
@@ -100,6 +176,9 @@ export function AtlasMap({
   buildingsRef.current = buildings
   lotsRef.current = lots
   photosRef.current = photos
+  historyMapIdRef.current = historyMapId
+  historyOpacityRef.current = historyOpacity
+  historyAttributionRef.current = historyAttribution
   onPoint.current = onPointClick
   onPhoto.current = onPhotoClick
   onViewRef.current = onView
@@ -269,6 +348,12 @@ export function AtlasMap({
           'circle-stroke-color': '#111111',
         },
       })
+      syncHistoryMap(
+        map,
+        historyMapIdRef.current,
+        historyOpacityRef.current,
+        historyAttributionRef.current,
+      )
       void paintPhotos()
       const selected = catalogRef.current.features.find(
         (feature) => feature.properties.id === selectedRef.current,
@@ -374,6 +459,12 @@ export function AtlasMap({
       source.setData(polygonCollection(lots, (lot) => lot.number))
     }
   }, [lots])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map?.getSource('esri')) return
+    syncHistoryMap(map, historyMapId, historyOpacity, historyAttribution)
+  }, [historyMapId, historyOpacity, historyAttribution])
 
   const hadFocus = useRef(false)
   useEffect(() => {
