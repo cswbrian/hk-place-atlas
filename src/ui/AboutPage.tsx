@@ -1,5 +1,6 @@
 import { CONTACT_EMAIL, GITHUB_URL } from '../domain/legal'
 import { copy, type SiteLocale } from '../domain/locale'
+import { Button } from './Button'
 
 function GitHubMark() {
   return (
@@ -54,13 +55,9 @@ export function AboutPage({
       </ul>
       <p className="about-actions">
         {showSignIn ? (
-          <button type="button" className="primary" onClick={onSignIn}>
-            {text.aboutSignIn}
-          </button>
+          <Button onClick={onSignIn}>{text.aboutSignIn}</Button>
         ) : (
-          <button type="button" className="primary" onClick={onBack}>
-            {text.aboutBack}
-          </button>
+          <Button onClick={onBack}>{text.aboutBack}</Button>
         )}
       </p>
       <footer className="about-footer">

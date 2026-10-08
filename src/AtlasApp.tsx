@@ -35,6 +35,7 @@ import { trackPageview } from './domain/analytics'
 import { districtBbox } from './domain/districtView'
 import { shouldLoadRecent, type RecentItem } from './domain/recent'
 import { AboutPage } from './ui/AboutPage'
+import { Button } from './ui/Button'
 import { LegalPage } from './ui/LegalPage'
 import { legal, parseLegalPage } from './domain/legal'
 import {
@@ -515,16 +516,15 @@ function AtlasApp() {
                 {text.otherLanguage}
               </a>
               {auth && !user ? (
-                <button
-                  type="button"
-                  className="linkish"
+                <Button
+                  variant="link"
                   onClick={() => {
                     setNavOpen(false)
                     setSignInIntent('contribute')
                   }}
                 >
                   {text.signIn}
-                </button>
+                </Button>
               ) : null}
               {user ? (
                 <a href={`/api/auth/logout?return=${encodeURIComponent(path + search)}`}>{text.signOut}</a>
@@ -605,7 +605,7 @@ function AtlasApp() {
                     }
                     setFormError(null)
                     void saveFeature(
-                      wikiDraftToWrite(draft),
+                      wikiDraftToWrite(draft, creating ? undefined : selected?.body),
                       creating ? undefined : selected?.slug,
                       creating ? undefined : selected?.updatedAt,
                     )

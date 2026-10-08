@@ -170,4 +170,37 @@ describe('EstablishmentDetail', () => {
     expect(html).not.toContain('detail-back')
     expect(html).not.toContain('aria-label="Back to site"')
   })
+
+  it('renders compact source rows with icon, title, site name, and ugc rel', () => {
+    const withSources = place({
+      id: 'with-src',
+      names: [{ lang: 'en', text: 'House', primary: true }],
+      status: 'standing',
+      sources: [
+        {
+          label: 'Official page',
+          url: 'https://example.com/a',
+          siteName: 'Example',
+          icon: 'https://example.com/favicon.ico',
+        },
+        { url: 'https://www.data.gov.hk/dataset' },
+      ],
+    })
+    const html = renderToStaticMarkup(
+      createElement(EstablishmentDetail, {
+        establishment: withSources,
+        establishments: [withSources],
+        locale: 'en',
+        onSelect: () => {},
+      }),
+    )
+    expect(html).toContain('class="ref-list"')
+    expect(html).toContain('class="ref-link"')
+    expect(html).toContain('rel="nofollow ugc noopener noreferrer"')
+    expect(html).toContain('Official page')
+    expect(html).toContain('Example')
+    expect(html).toContain('src="https://example.com/favicon.ico"')
+    expect(html).toContain('data.gov.hk/dataset')
+    expect(html).toContain('data.gov.hk')
+  })
 })

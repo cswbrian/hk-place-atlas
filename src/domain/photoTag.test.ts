@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   PHOTO_TAG_UPSERT,
   attachPhotoTags,
+  dragTagPoint,
   imageClickFraction,
   imageMediaType,
   photoListFilter,
@@ -50,6 +51,24 @@ describe('imageClickFraction', () => {
 
   it('ignores a click in the empty space around the picture', () => {
     expect(imageClickFraction({ x: 10, y: 10 }, frame, natural)).toBeNull()
+  })
+})
+
+describe('dragTagPoint', () => {
+  const frame = { left: 0, top: 0, width: 200, height: 100 }
+  const natural = { width: 100, height: 100 }
+
+  it('moves the tag by the drag distance, keeping where it was grabbed', () => {
+    const point = dragTagPoint({ x: 0.2, y: 0.2 }, { x: 80, y: 30 }, { x: 100, y: 50 }, frame, natural)
+    expect(point?.x).toBeCloseTo(0.4)
+    expect(point?.y).toBeCloseTo(0.4)
+  })
+
+  it('keeps the tag on the picture when dragged past the edge', () => {
+    expect(dragTagPoint({ x: 0.9, y: 0.1 }, { x: 140, y: 10 }, { x: 199, y: -40 }, frame, natural)).toEqual({
+      x: 1,
+      y: 0,
+    })
   })
 })
 

@@ -212,4 +212,48 @@ describe('wikiDraftFromFeature', () => {
       start: { year: 1970 },
     })
   })
+
+  it('keeps sources through the draft and preserves base tags and custom fields', () => {
+    const feature: Feature = {
+      id: 'bdbiar-1',
+      kind: 'establishment',
+      slug: 'house-1970',
+      nameEn: 'House',
+      nameZh: '屋',
+      status: 'standing',
+      start: { year: 1970 },
+      end: null,
+      lng: 114.1,
+      lat: 22.2,
+      body: {
+        notes: 'n',
+        sources: [{ label: 'BDBIAR', url: 'https://data.gov.hk', siteName: 'data.gov.hk' }],
+        images: [{ url: 'https://img.example/a.jpg' }],
+        tags: ['Residential'],
+        customFields: [{ key: 'use', value: 'Residential' }],
+      },
+      touched: true,
+      createdAt: '',
+      updatedAt: '',
+    }
+    const draft = wikiDraftFromFeature(feature)
+    expect(draft.sources).toEqual(feature.body.sources)
+    const write = wikiDraftToWrite({ ...draft, notes: 'edited' }, feature.body)
+    expect(write.body.sources).toEqual(feature.body.sources)
+    expect(write.body.images).toEqual(feature.body.images)
+    expect(write.body.tags).toEqual(['Residential'])
+    expect(write.body.customFields).toEqual([{ key: 'use', value: 'Residential' }])
+    expect(write.body.notes).toBe('edited')
+  })
+
+  it('drops empty source rows and flags invalid urls', () => {
+    const draft = {
+      ...emptyWikiDraft(null, null),
+      sources: [{ url: '' }, { url: 'javascript:alert(1)', label: 'x' }, { url: 'https://ok.example', label: 'Ok' }],
+    }
+    expect(wikiDraftIssues(draft)).toEqual(['sourceUrl'])
+    expect(wikiDraftToWrite({ ...draft, sources: [{ url: '' }, { url: 'https://ok.example', label: 'Ok' }] }).body.sources).toEqual([
+      { url: 'https://ok.example', label: 'Ok' },
+    ])
+  })
 })

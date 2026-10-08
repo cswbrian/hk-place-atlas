@@ -79,21 +79,32 @@ export function imageMediaType(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 
   return null
 }
 
-export function imageClickFraction(
-  click: { x: number; y: number },
-  frame: { left: number; top: number; width: number; height: number },
-  natural: { width: number; height: number },
-): { x: number; y: number } | null {
+type Point = { x: number; y: number }
+type Frame = { left: number; top: number; width: number; height: number }
+type Size = { width: number; height: number }
+
+function imageFraction(client: Point, frame: Frame, natural: Size): Point | null {
   if (frame.width <= 0 || frame.height <= 0 || natural.width <= 0 || natural.height <= 0) return null
   const scale = Math.min(frame.width / natural.width, frame.height / natural.height)
   const renderedW = natural.width * scale
   const renderedH = natural.height * scale
   const originX = frame.left + (frame.width - renderedW) / 2
   const originY = frame.top + (frame.height - renderedH) / 2
-  const x = (click.x - originX) / renderedW
-  const y = (click.y - originY) / renderedH
-  if (x < 0 || y < 0 || x > 1 || y > 1) return null
-  return { x, y }
+  return { x: (client.x - originX) / renderedW, y: (client.y - originY) / renderedH }
+}
+
+export function imageClickFraction(click: Point, frame: Frame, natural: Size): Point | null {
+  const point = imageFraction(click, frame, natural)
+  if (!point || point.x < 0 || point.y < 0 || point.x > 1 || point.y > 1) return null
+  return point
+}
+
+export function dragTagPoint(tag: Point, start: Point, current: Point, frame: Frame, natural: Size): Point | null {
+  const from = imageFraction(start, frame, natural)
+  const to = imageFraction(current, frame, natural)
+  if (!from || !to) return null
+  const clamp = (value: number) => Math.min(1, Math.max(0, value))
+  return { x: clamp(tag.x + to.x - from.x), y: clamp(tag.y + to.y - from.y) }
 }
 
 export function pinLabelPosition(x: number, y: number): { left: string; top: string; transform: string } {

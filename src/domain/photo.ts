@@ -144,6 +144,13 @@ export function mergeSitePhotos(lists: Photo[][]): Photo[] {
   return merged
 }
 
+export function sortPhotosByTaken(photos: Photo[]): Photo[] {
+  return [...photos].sort((a, b) => {
+    if (a.year == null || b.year == null) return (a.year == null ? 1 : 0) - (b.year == null ? 1 : 0)
+    return a.year - b.year
+  })
+}
+
 export function mapThumbs(photos: PhotoPin[], zoom: number): MapThumb[] {
   if (zoom < PHOTO_MAP_ZOOM) return []
   const groups = new Map<string, PhotoPin[]>()

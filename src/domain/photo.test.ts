@@ -10,6 +10,7 @@ import {
   photoMetaIssues,
   photoObjectKeys,
   photoUploadIssues,
+  sortPhotosByTaken,
   thumbPath,
   type Photo,
 } from './photo'
@@ -186,6 +187,37 @@ describe('mergeSitePhotos', () => {
   it('returns an empty list when there are no place lists', () => {
     expect(mergeSitePhotos([])).toEqual([])
     expect(mergeSitePhotos([[], []])).toEqual([])
+  })
+})
+
+describe('sortPhotosByTaken', () => {
+  const sample = (id: string, year: number | null): Photo => ({
+    id,
+    featureId: 'place-1',
+    lng: 114.1,
+    lat: 22.2,
+    source: 'SCMP',
+    caption: '',
+    photographer: '',
+    license: '',
+    year,
+    circa: false,
+    sourceUrl: 'https://example.com/a',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'user-1',
+    tags: [],
+  })
+
+  it('orders dated photos early to late and keeps undated ones last in their order', () => {
+    const photos = [sample('none-1', null), sample('y1972', 1972), sample('y1920a', 1920), sample('none-2', null), sample('y1920b', 1920)]
+    expect(sortPhotosByTaken(photos).map((photo) => photo.id)).toEqual([
+      'y1920a',
+      'y1920b',
+      'y1972',
+      'none-1',
+      'none-2',
+    ])
+    expect(photos[0]!.id).toBe('none-1')
   })
 })
 

@@ -2,6 +2,7 @@ import { featureAsEstablishment, type Feature, type FeatureKind } from '../domai
 import { catalogCountLine, copy, displayNames, type SiteLocale } from '../domain/locale'
 import { updatedAgo, yearSpan, type RecentItem } from '../domain/recent'
 import type { SiteQueryResult } from '../domain/querySite'
+import { Button } from './Button'
 import { EstablishmentDetail } from './EstablishmentDetail'
 import { SitePanel } from './SitePanel'
 import type { FeatureEdge } from '../api/features'
@@ -104,9 +105,9 @@ export function FeaturePanel({
               const ago = updatedAgo(item.updatedAt, new Date(), locale)
               return (
                 <li key={item.slug}>
-                  <button type="button" className="linkish" onClick={() => onSelectSlug(item.slug, item.kind)}>
+                  <Button variant="link" onClick={() => onSelectSlug(item.slug, item.kind)}>
                     {displayNames(item, locale).title}
-                  </button>
+                  </Button>
                   <span className="recent-meta">
                     {yearSpan(item)}
                     {ago ? ` · ${ago}` : ''}
@@ -118,9 +119,7 @@ export function FeaturePanel({
         </section>
       ) : null}
       {onAdd ? (
-        <button type="button" className="primary" onClick={onAdd}>
-          {text.addPlace}
-        </button>
+        <Button onClick={onAdd}>{text.addPlace}</Button>
       ) : null}
     </div>
   )

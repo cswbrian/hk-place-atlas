@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { displayNames, type SiteLocale, copy } from '../domain/locale'
 import type { Feature } from '../domain/feature'
+import { Button } from './Button'
 
 type Props = {
   locale: SiteLocale
@@ -65,8 +66,7 @@ export function SearchBox({ locale, year, onSelect, search }: Props) {
               const names = displayNames(feature, locale)
               return (
                 <li key={feature.id}>
-                  <button
-                    type="button"
+                  <Button
                     onClick={() => {
                       onSelect(feature)
                       setOpen(false)
@@ -74,7 +74,7 @@ export function SearchBox({ locale, year, onSelect, search }: Props) {
                   >
                     <span>{names.title}</span>
                     {names.secondary ? <span className="muted">{names.secondary}</span> : null}
-                  </button>
+                  </Button>
                 </li>
               )
             })

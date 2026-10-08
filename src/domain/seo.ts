@@ -249,7 +249,10 @@ export function crawlerBodyHtml(
   const notes = feature.body.notes.trim()
   const sources = feature.body.sources
     .filter((source) => source.url)
-    .map((source) => `<li><a href="${escapeHtml(source.url!)}">${escapeHtml(source.label || source.url!)}</a></li>`)
+    .map(
+      (source) =>
+        `<li><a href="${escapeHtml(source.url!)}" rel="nofollow ugc noopener noreferrer">${escapeHtml(source.label || source.url!)}</a></li>`,
+    )
     .join('')
   const parts = [
     `<main>`,

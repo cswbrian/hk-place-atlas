@@ -64,6 +64,7 @@ import {
   type SeoPath,
   type SitemapFeature,
 } from '../src/domain/seo'
+import { isHttpUrl, parseLinkMeta } from '../src/domain/linkMeta'
 import {
   applyWikiWrite,
   checkIfMatch,
@@ -694,6 +695,44 @@ function gisAllowlisted(upstream: string): boolean {
   return upstream.startsWith(`${CSDI_WFS}?`) || upstream.startsWith(`${LANDSD_ROOT}/gs/api/v1.0.0/`)
 }
 
+const LINK_PREVIEW_CACHE_SECONDS = 86_400
+const LINK_PREVIEW_MAX_BYTES = 256 * 1024
+
+async function handleLinkPreview(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const session = await requireSession(request, env)
+  if (session instanceof Response) return session
+  const raw = new URL(request.url).searchParams.get('url')?.trim() ?? ''
+  if (!raw || !isHttpUrl(raw)) return json({})
+  const cache = caches.default
+  const cacheUrl = new URL(request.url)
+  cacheUrl.searchParams.sort()
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
+  const hit = await cache.match(cacheKey)
+  if (hit) return hit
+  try {
+    const upstream = await fetch(raw, {
+      redirect: 'follow',
+      headers: { 'user-agent': 'hk-atlas/1.0', accept: 'text/html' },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!upstream.ok) return json({})
+    const contentType = upstream.headers.get('content-type') ?? ''
+    if (!contentType.includes('text/html')) return json({})
+    const buffer = await upstream.arrayBuffer()
+    const bytes = buffer.byteLength > LINK_PREVIEW_MAX_BYTES ? buffer.slice(0, LINK_PREVIEW_MAX_BYTES) : buffer
+    const html = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+    const meta = parseLinkMeta(html, upstream.url || raw)
+    const response = json(meta)
+    const headers = new Headers(response.headers)
+    headers.set('cache-control', `private, max-age=${LINK_PREVIEW_CACHE_SECONDS}`)
+    const cached = new Response(response.body, { status: 200, headers })
+    ctx.waitUntil(cache.put(cacheKey, cached.clone()))
+    return cached
+  } catch {
+    return json({})
+  }
+}
+
 async function handleGis(request: Request, route: ApiRoute, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url)
   const upstream = gisUpstream(route, url)
@@ -1278,6 +1317,7 @@ export default {
     if (route.type === 'historyMap' && request.method === 'GET') {
       return handleHistoryMap(request, route, ctx)
     }
+    if (route.type === 'linkPreview' && request.method === 'GET') return handleLinkPreview(request, env, ctx)
     return json({ error: 'method not allowed' }, 405)
   },
 }

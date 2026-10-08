@@ -17,6 +17,68 @@ describe('parseFeatureWrite', () => {
     expect(parsed).toMatchObject({ kind: 'shop', nameEn: 'Cafe', lng: 114.17 })
     expect(parseFeatureWrite({ kind: 'shop', nameEn: '  ' })).toMatchObject({ error: 'name required' })
   })
+
+  it('keeps http(s) sources with meta and drops unsafe urls', () => {
+    const parsed = parseFeatureWrite({
+      kind: 'establishment',
+      nameEn: 'House',
+      nameZh: '',
+      status: 'standing',
+      start: null,
+      end: null,
+      lng: null,
+      lat: null,
+      body: {
+        notes: '',
+        sources: [
+          {
+            label: '  Official page  ',
+            url: 'https://example.com/a',
+            siteName: 'Example',
+            icon: 'https://example.com/favicon.ico',
+          },
+          { label: 'Bad', url: 'javascript:alert(1)' },
+          { label: 'No url' },
+          { url: 'http://ok.example/', icon: 'http://ok.example/icon.png' },
+        ],
+        images: [],
+        tags: [],
+        customFields: [],
+      },
+    })
+    if ('error' in parsed) throw new Error(parsed.error)
+    expect(parsed.body.sources).toEqual([
+      {
+        label: 'Official page',
+        url: 'https://example.com/a',
+        siteName: 'Example',
+        icon: 'https://example.com/favicon.ico',
+      },
+      { url: 'http://ok.example/' },
+    ])
+  })
+
+  it('caps sources at 20 links', () => {
+    const parsed = parseFeatureWrite({
+      kind: 'establishment',
+      nameEn: 'House',
+      nameZh: '',
+      status: 'standing',
+      start: null,
+      end: null,
+      lng: null,
+      lat: null,
+      body: {
+        notes: '',
+        sources: Array.from({ length: 25 }, (_, i) => ({ url: `https://example.com/${i}` })),
+        images: [],
+        tags: [],
+        customFields: [],
+      },
+    })
+    if ('error' in parsed) throw new Error(parsed.error)
+    expect(parsed.body.sources).toHaveLength(20)
+  })
 })
 
 describe('checkIfMatch', () => {

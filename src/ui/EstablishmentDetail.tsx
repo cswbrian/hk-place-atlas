@@ -1,11 +1,14 @@
+import { useState, type ReactNode } from 'react'
 import { bilingualNames, catalogYear, formatFuzzyDate, primaryName } from '../domain/dates'
+import { linkHostname } from '../domain/linkMeta'
 import { linkText } from '../domain/links'
 import { copy, displayNames, type SiteLocale } from '../domain/locale'
 import { formatBuildingSummary, formatLotSummary } from '../domain/lots'
 import { siteCluster } from '../domain/site'
 import type { Establishment, Source } from '../domain/types'
+import { Button } from './Button'
+import { BackIcon } from './icons'
 import { CatalogRow } from './SitePanel'
-import type { ReactNode } from 'react'
 
 type Props = {
   establishment: Establishment
@@ -43,29 +46,20 @@ export function EstablishmentDetail({
       {onBack || onEdit ? (
         <div className="detail-head">
           {onBack ? (
-            <button
-              type="button"
-              className="ghost detail-back"
+            <Button
+              variant="ghost"
+              className="detail-back"
               aria-label={text.backToSite}
               title={text.backToSite}
               onClick={onBack}
             >
-              <svg viewBox="4.2 5.2 15.6 13.6" width="20" height="18" aria-hidden="true" focusable="false">
-                <path
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19 12H5M11 6l-6 6 6 6"
-                />
-              </svg>
-            </button>
+              <BackIcon />
+            </Button>
           ) : null}
           {onEdit ? (
-            <button type="button" className="detail-edit" onClick={onEdit}>
+            <Button className="detail-edit" onClick={onEdit}>
               {text.edit}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -149,23 +143,73 @@ export function EstablishmentDetail({
   )
 }
 
+function GlobeIcon() {
+  return (
+    <svg className="ref-icon-fallback" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.25" />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        d="M2 8h12M8 2c-2.2 1.8-3.2 3.8-3.2 6S5.8 12.2 8 14c2.2-1.8 3.2-3.8 3.2-6S10.2 3.8 8 2z"
+      />
+    </svg>
+  )
+}
+
+function RefIcon({ src }: { src?: string }) {
+  const [broken, setBroken] = useState(false)
+  if (!src || broken) return <GlobeIcon />
+  return (
+    <img
+      className="ref-icon"
+      src={src}
+      alt=""
+      width={16}
+      height={16}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+    />
+  )
+}
+
 function LinkSection({ title, links }: { title: string; links: Source[] }) {
   if (!links.length) return null
   return (
     <section>
       <h3>{title}</h3>
       <ul className="ref-list">
-        {links.map((link, index) => (
-          <li key={`${link.url ?? ''}-${link.label ?? ''}-${index}`}>
-            {link.url ? (
-              <a href={link.url} title={link.url} target="_blank" rel="noreferrer">
-                {linkText(link)}
-              </a>
-            ) : (
-              linkText(link)
-            )}
-          </li>
-        ))}
+        {links.map((link, index) => {
+          const titleText = linkText(link)
+          const secondary = link.siteName?.trim() || (link.url ? linkHostname(link.url) : '')
+          const body = (
+            <>
+              <RefIcon src={link.icon} />
+              <span className="ref-text">
+                <span className="ref-title">{titleText}</span>
+                {secondary ? <span className="ref-site muted">{secondary}</span> : null}
+              </span>
+            </>
+          )
+          return (
+            <li key={`${link.url ?? ''}-${link.label ?? ''}-${index}`}>
+              {link.url ? (
+                <a
+                  className="ref-link"
+                  href={link.url}
+                  title={link.url}
+                  target="_blank"
+                  rel="nofollow ugc noopener noreferrer"
+                >
+                  {body}
+                </a>
+              ) : (
+                <div className="ref-link">{body}</div>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </section>
   )

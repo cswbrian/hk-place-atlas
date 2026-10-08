@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { SignInPromptIntent } from '../domain/authIntent'
 import { copy, type SiteLocale } from '../domain/locale'
+import { CloseIcon } from './icons'
 
 type Props = {
   locale: SiteLocale
@@ -69,16 +70,7 @@ export function SignInPrompt({ locale, intent, signInHref, onClose }: Props) {
           title={text.close}
           onClick={onClose}
         >
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 6l12 12M18 6L6 18"
-            />
-          </svg>
+          <CloseIcon />
         </button>
         <h2 id="sign-in-prompt-title">{title}</h2>
         <p>{text.signInPromptBody}</p>

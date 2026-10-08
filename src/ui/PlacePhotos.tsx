@@ -6,11 +6,13 @@ import {
   mergeSitePhotos,
   photoMetaComplete,
   photoUploadIssues,
+  sortPhotosByTaken,
   thumbPath,
   type Photo,
 } from '../domain/photo'
 import type { FeatureKind } from '../domain/feature'
 import type { PhotoTag } from '../domain/photoTag'
+import { Button } from './Button'
 import { PhotoLightbox } from './PhotoLightbox'
 
 type Props = {
@@ -127,17 +129,11 @@ export function PlacePhotos({
   }
 
   async function remove(photo: Photo) {
-    if (!window.confirm(text.deletePhotoConfirm)) return
-    setError(null)
-    try {
-      await deletePhoto(photo.id)
-      setPhotos((current) => current.filter((item) => item.id !== photo.id))
-      if (openId === photo.id) setOpenId(null)
-      if (draftId === photo.id) setDraftId(null)
-      onChange?.()
-    } catch (err) {
-      setError(photoMessage(err instanceof Error ? err.message : '', text))
-    }
+    await deletePhoto(photo.id)
+    setPhotos((current) => current.filter((item) => item.id !== photo.id))
+    setOpenId(null)
+    if (draftId === photo.id) setDraftId(null)
+    onChange?.()
   }
 
   async function discardDraft() {
@@ -154,7 +150,8 @@ export function PlacePhotos({
     }
   }
 
-  const openIndex = photos.findIndex((photo) => photo.id === openId)
+  const shown = sortPhotosByTaken(photos)
+  const openIndex = shown.findIndex((photo) => photo.id === openId)
   const draftSession = Boolean(draftId && openId === draftId)
 
   function setTags(photoId: string, tags: PhotoTag[]) {
@@ -170,7 +167,7 @@ export function PlacePhotos({
       <h3>{text.photos}</h3>
       {photos.length === 0 ? <p className="muted">{text.photoNote}</p> : null}
       <ul className="photo-list">
-        {photos.map((photo) => {
+        {shown.map((photo) => {
           const taken = formatPhotoTaken(photo.year, photo.circa)
           const complete = photoMetaComplete(photo)
           return (
@@ -184,26 +181,6 @@ export function PlacePhotos({
               {complete ? null : <p className="muted">{text.photoIncomplete}</p>}
               {taken ? <p className="muted">{taken}</p> : null}
               {photo.caption ? <p className="muted">{photo.caption}</p> : null}
-              {userSub && userSub === photo.createdBy ? (
-                <button
-                  type="button"
-                  className="photo-delete"
-                  aria-label={text.deletePhoto}
-                  title={text.deletePhoto}
-                  onClick={() => void remove(photo)}
-                >
-                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-                    <path
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13M10 11v6M14 11v6"
-                    />
-                  </svg>
-                </button>
-              ) : null}
             </li>
           )
         })}
@@ -222,9 +199,8 @@ export function PlacePhotos({
               }}
             />
           ) : null}
-          <button
+          <Button
             ref={addButton}
-            type="button"
             disabled={pending}
             onClick={() => {
               if (!userSub) {
@@ -235,14 +211,14 @@ export function PlacePhotos({
             }}
           >
             {pending ? text.uploadPhoto : text.addPhoto}
-          </button>
+          </Button>
         </>
       ) : null}
       {featureId && !allowUpload ? <p className="muted">{text.photoPlace}</p> : null}
       {error ? <p className="error">{error}</p> : null}
       {openIndex >= 0 ? (
         <PhotoLightbox
-          photos={photos}
+          photos={shown}
           index={openIndex}
           locale={locale}
           placeFeatureId={homeFeatureId}
@@ -256,11 +232,12 @@ export function PlacePhotos({
             setOpenId(null)
           }}
           onDiscard={() => discardDraft()}
-          onIndex={(index) => setOpenId(photos[index]?.id ?? null)}
+          onIndex={(index) => setOpenId(shown[index]?.id ?? null)}
           onOpenPlace={onOpenPlace}
           onCreatePlace={onCreatePlace}
           onTags={setTags}
           onPhotoUpdate={setPhoto}
+          onDelete={remove}
         />
       ) : null}
     </section>

@@ -34,17 +34,52 @@ function parseFuzzy(value: unknown): FuzzyDate | null {
   }
 }
 
+const MAX_SOURCES = 20
+const MAX_LABEL = 120
+const MAX_SITE_NAME = 80
+const MAX_URL = 2048
+
+function trimCap(value: string, max: number): string {
+  const trimmed = value.trim()
+  return trimmed.length <= max ? trimmed : trimmed.slice(0, max)
+}
+
+function httpUrl(value: unknown, httpsOnly = false): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > MAX_URL) return undefined
+  try {
+    const parsed = new URL(trimmed)
+    if (httpsOnly) {
+      if (parsed.protocol !== 'https:') return undefined
+    } else if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined
+    }
+    return trimmed
+  } catch {
+    return undefined
+  }
+}
+
 function parseSources(value: unknown): Source[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    if (!isRecord(item)) return []
-    return [
-      {
-        label: typeof item.label === 'string' ? item.label : undefined,
-        url: typeof item.url === 'string' ? item.url : undefined,
-      },
-    ]
-  })
+  const sources: Source[] = []
+  for (const item of value) {
+    if (sources.length >= MAX_SOURCES) break
+    if (!isRecord(item)) continue
+    const url = httpUrl(item.url)
+    if (!url) continue
+    const label = typeof item.label === 'string' ? trimCap(item.label, MAX_LABEL) : undefined
+    const siteName = typeof item.siteName === 'string' ? trimCap(item.siteName, MAX_SITE_NAME) : undefined
+    const icon = httpUrl(item.icon, true)
+    sources.push({
+      url,
+      ...(label ? { label } : {}),
+      ...(siteName ? { siteName } : {}),
+      ...(icon ? { icon } : {}),
+    })
+  }
+  return sources
 }
 
 export function parseFeatureWrite(body: unknown): FeatureWrite | { error: string } {

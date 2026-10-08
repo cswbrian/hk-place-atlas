@@ -1,12 +1,20 @@
-import { useEffect, useState } from 'react'
-import type { Feature, FeatureStatus } from '../domain/feature'
+import { useEffect, useRef, useState } from 'react'
+import { fetchLinkPreview } from '../api/links'
+import { isHttpUrl } from '../domain/linkMeta'
+import type { Feature, FeatureBody, FeatureStatus } from '../domain/feature'
 import { copy, type SiteLocale } from '../domain/locale'
+import type { Source } from '../domain/types'
 import type { FeatureWrite } from '../domain/wiki'
+import { Button } from './Button'
+import { MinusIcon, PlusIcon } from './icons'
+import { BackIcon, PanelCloseIcon } from './icons'
+import { YearField } from './YearField'
 
 export const FEATURE_YEAR_MIN = 1700
 export const FEATURE_YEAR_MAX = 2100
+export const MAX_DRAFT_SOURCES = 20
 
-export type WikiDraftIssue = 'year' | 'yearOrder' | 'standingEnd'
+export type WikiDraftIssue = 'year' | 'yearOrder' | 'standingEnd' | 'sourceUrl'
 
 export type WikiDraft = {
   kind: 'establishment' | 'shop' | 'event'
@@ -22,6 +30,7 @@ export type WikiDraft = {
   endDay: string
   endCirca: boolean
   notes: string
+  sources: Source[]
   lng: number | null
   lat: number | null
 }
@@ -61,6 +70,24 @@ function parseYearField(value: string): number | null | 'invalid' {
   return n
 }
 
+function compactSources(sources: Source[]): Source[] {
+  return sources.flatMap((source) => {
+    const url = source.url?.trim() ?? ''
+    if (!url) return []
+    const label = source.label?.trim()
+    const siteName = source.siteName?.trim()
+    const icon = source.icon?.trim()
+    return [
+      {
+        url,
+        ...(label ? { label } : {}),
+        ...(siteName ? { siteName } : {}),
+        ...(icon ? { icon } : {}),
+      },
+    ]
+  })
+}
+
 export function wikiDraftIssues(draft: WikiDraft): WikiDraftIssue[] {
   const issues: WikiDraftIssue[] = []
   const start = parseYearField(draft.startYear)
@@ -68,12 +95,20 @@ export function wikiDraftIssues(draft: WikiDraft): WikiDraftIssue[] {
   if (start === 'invalid' || end === 'invalid') issues.push('year')
   if (typeof start === 'number' && typeof end === 'number' && end < start) issues.push('yearOrder')
   if (formStatus(draft.status) === 'standing' && draft.endYear.trim()) issues.push('standingEnd')
+  for (const source of draft.sources) {
+    const url = source.url?.trim() ?? ''
+    if (url && !isHttpUrl(url)) {
+      issues.push('sourceUrl')
+      break
+    }
+  }
   return issues
 }
 
 function issueMessage(text: (typeof copy)[SiteLocale], issue: WikiDraftIssue): string {
   if (issue === 'yearOrder') return text.placeYearOrder
   if (issue === 'standingEnd') return text.placeStandingEnd
+  if (issue === 'sourceUrl') return text.placeSourceUrlInvalid
   return text.placeYearInvalid
 }
 
@@ -97,6 +132,7 @@ export function emptyWikiDraft(lng: number | null, lat: number | null): WikiDraf
     endDay: '',
     endCirca: false,
     notes: '',
+    sources: [],
     lng,
     lat,
   }
@@ -118,12 +154,13 @@ export function wikiDraftFromFeature(feature: Feature): WikiDraft {
     endDay: feature.end?.day ? String(feature.end.day) : '',
     endCirca: Boolean(feature.end?.circa),
     notes: feature.body.notes,
+    sources: feature.body.sources.map((source) => ({ ...source })),
     lng: feature.lng,
     lat: feature.lat,
   }
 }
 
-export function wikiDraftToWrite(draft: WikiDraft): FeatureWrite {
+export function wikiDraftToWrite(draft: WikiDraft, base?: FeatureBody): FeatureWrite {
   const startYear = yearPart(draft.startYear)
   const endYear = yearPart(draft.endYear)
   return {
@@ -151,10 +188,12 @@ export function wikiDraftToWrite(draft: WikiDraft): FeatureWrite {
     lat: draft.lat,
     body: {
       notes: draft.notes,
-      sources: [],
-      images: [],
-      tags: [],
-      customFields: [],
+      sources: compactSources(draft.sources),
+      images: base?.images ?? [],
+      tags: base?.tags ?? [],
+      customFields: base?.customFields ?? [],
+      district: base?.district,
+      region: base?.region,
     },
   }
 }
@@ -170,13 +209,57 @@ type Props = {
   onDelete?: () => void
 }
 
+function updateSource(draft: WikiDraft, index: number, patch: Partial<Source>): WikiDraft {
+  return {
+    ...draft,
+    sources: draft.sources.map((source, i) => (i === index ? { ...source, ...patch } : source)),
+  }
+}
+
 export function FeatureForm({ locale, draft, creating, error, onChange, onSave, onCancel, onDelete }: Props) {
   const text = copy[locale]
   const [localError, setLocalError] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState<number | null>(null)
+  const draftRef = useRef(draft)
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    draftRef.current = draft
+    onChangeRef.current = onChange
+  }, [draft, onChange])
   useEffect(() => {
     setLocalError(null)
   }, [draft])
   const shownError = localError ?? error
+
+  async function previewAt(index: number, rawUrl?: string) {
+    const latest = draftRef.current
+    const url = (rawUrl ?? latest.sources[index]?.url ?? '').trim()
+    if (!url || !isHttpUrl(url)) return
+    setPreviewing(index)
+    try {
+      const meta = await fetchLinkPreview(url)
+      const current = draftRef.current
+      const source = current.sources[index]
+      if (!source) return
+      onChangeRef.current(
+        updateSource(
+          {
+            ...current,
+            sources: current.sources.map((item, i) => (i === index ? { ...item, url } : item)),
+          },
+          index,
+          {
+            label: source.label?.trim() ? source.label : meta.title,
+            siteName: meta.siteName ?? source.siteName,
+            icon: meta.icon ?? source.icon,
+          },
+        ),
+      )
+    } finally {
+      setPreviewing((active) => (active === index ? null : active))
+    }
+  }
+
   const dismissLabel = creating ? text.close : text.cancel
   return (
     <form
@@ -192,37 +275,15 @@ export function FeatureForm({ locale, draft, creating, error, onChange, onSave, 
         onSave()
       }}
     >
-      <button
-        type="button"
-        className="ghost detail-back"
+      <Button
+        variant="ghost"
+        className="detail-back"
         aria-label={dismissLabel}
         title={dismissLabel}
         onClick={onCancel}
       >
-        {creating ? (
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 6l12 12M18 6L6 18"
-            />
-          </svg>
-        ) : (
-          <svg viewBox="4.2 5.2 15.6 13.6" width="20" height="18" aria-hidden="true" focusable="false">
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 12H5M11 6l-6 6 6 6"
-            />
-          </svg>
-        )}
-      </button>
+        {creating ? <PanelCloseIcon /> : <BackIcon />}
+      </Button>
       <h2>{creating ? text.add : text.edit}</h2>
       {creating ? (
         <label>
@@ -271,43 +332,90 @@ export function FeatureForm({ locale, draft, creating, error, onChange, onSave, 
         </div>
       </fieldset>
       <div className="date-row">
-        <div>
-          <label>
-            {text.start}
-            <input value={draft.startYear} onChange={(event) => onChange({ ...draft, startYear: event.target.value })} placeholder={text.year} />
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={draft.startCirca}
-              onChange={(event) => onChange({ ...draft, startCirca: event.target.checked })}
-            />
-            {text.circa}
-          </label>
-        </div>
-        <div>
-          <label>
-            {text.end}
-            <input
-              value={draft.endYear}
-              onChange={(event) => onChange(withEndYear(draft, event.target.value))}
-              placeholder={text.year}
-            />
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={draft.endCirca}
-              onChange={(event) => onChange({ ...draft, endCirca: event.target.checked })}
-            />
-            {text.circa}
-          </label>
-        </div>
+        <YearField
+          label={text.start}
+          year={draft.startYear}
+          circa={draft.startCirca}
+          onYear={(startYear) => onChange({ ...draft, startYear })}
+          onCirca={(startCirca) => onChange({ ...draft, startCirca })}
+          yearPlaceholder={text.year}
+          circaLabel={text.circa}
+        />
+        <YearField
+          label={text.end}
+          year={draft.endYear}
+          circa={draft.endCirca}
+          onYear={(endYear) => onChange(withEndYear(draft, endYear))}
+          onCirca={(endCirca) => onChange({ ...draft, endCirca })}
+          yearPlaceholder={text.year}
+          circaLabel={text.circa}
+        />
       </div>
       <label>
         {text.notes}
         <textarea value={draft.notes} onChange={(event) => onChange({ ...draft, notes: event.target.value })} rows={4} />
       </label>
+      <fieldset className="links-field">
+        <legend>{text.referenceLinks}</legend>
+        {draft.sources.map((source, index) => (
+          <div key={index} className="link-row">
+            <div className="link-row-fields">
+              <label className="link-field">
+                <span className="sr-only">{text.linkUrl}</span>
+                <input
+                  type="url"
+                  value={source.url ?? ''}
+                  onChange={(event) => onChange(updateSource(draft, index, { url: event.target.value }))}
+                  onBlur={(event) => void previewAt(index, event.currentTarget.value)}
+                  onPaste={(event) => {
+                    const pasted = event.clipboardData.getData('text')
+                    window.setTimeout(() => void previewAt(index, pasted || draftRef.current.sources[index]?.url), 0)
+                  }}
+                  placeholder="https://"
+                />
+              </label>
+              <label className="link-field">
+                <span className="sr-only">{text.linkTitle}</span>
+                <input
+                  value={source.label ?? ''}
+                  onChange={(event) => onChange(updateSource(draft, index, { label: event.target.value }))}
+                  placeholder={text.linkTitle}
+                />
+              </label>
+              {(source.siteName || source.icon || previewing === index) && source.url?.trim() ? (
+                <div className="ref-preview">
+                  {source.icon ? (
+                    <img src={source.icon} alt="" width={16} height={16} loading="lazy" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span className="ref-icon-fallback" aria-hidden="true" />
+                  )}
+                  <span className="ref-preview-site muted">{source.siteName ?? ''}</span>
+                </div>
+              ) : null}
+            </div>
+            <Button
+              variant="ghost"
+              className="link-remove"
+              aria-label={text.removeLink}
+              title={text.removeLink}
+              onClick={() => onChange({ ...draft, sources: draft.sources.filter((_, i) => i !== index) })}
+            >
+              <MinusIcon />
+            </Button>
+          </div>
+        ))}
+        {draft.sources.length < MAX_DRAFT_SOURCES ? (
+          <Button
+            variant="ghost"
+            className="link-add"
+            aria-label={text.addLink}
+            title={text.addLink}
+            onClick={() => onChange({ ...draft, sources: [...draft.sources, { url: '' }] })}
+          >
+            <PlusIcon />
+          </Button>
+        ) : null}
+      </fieldset>
       <p className="muted">
         {draft.lat != null && draft.lng != null
           ? `${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}`
@@ -315,13 +423,13 @@ export function FeatureForm({ locale, draft, creating, error, onChange, onSave, 
       </p>
       {shownError ? <p className="error">{shownError}</p> : null}
       <div className="row form-actions">
-        <button type="submit" className="primary">
+        <Button variant="primary" type="submit">
           {text.save}
-        </button>
+        </Button>
         {onDelete ? (
-          <button type="button" className="linkish form-delete" onClick={onDelete}>
+          <Button variant="link" className="form-delete" onClick={onDelete}>
             {text.delete}
-          </button>
+          </Button>
         ) : null}
       </div>
     </form>

@@ -53,6 +53,8 @@ export type BuildingSnapshot = {
 export type Source = {
   label?: string
   url?: string
+  siteName?: string
+  icon?: string
 }
 
 export type CustomField = {

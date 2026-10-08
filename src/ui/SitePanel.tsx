@@ -4,6 +4,7 @@ import { formatBuildingSummary } from '../domain/lots'
 import { compareSiteOrder } from '../domain/site'
 import type { SiteQueryResult } from '../domain/querySite'
 import type { Establishment } from '../domain/types'
+import { Button } from './Button'
 
 type Props = {
   site: SiteQueryResult
@@ -83,16 +84,15 @@ export function CatalogRow({
         onClick={onTitle}
       >
         {onTitle ? (
-          <button
-            type="button"
-            className="linkish"
+          <Button
+            variant="link"
             onClick={(event) => {
               event.stopPropagation()
               onTitle()
             }}
           >
             {title}
-          </button>
+          </Button>
         ) : (
           <span>{title}</span>
         )}
@@ -100,9 +100,9 @@ export function CatalogRow({
         {meta ? <p className="muted">{meta}</p> : null}
       </div>
       {onEdit ? (
-        <button type="button" className="linkish" onClick={onEdit}>
+        <Button variant="link" onClick={onEdit}>
           {editLabel ?? 'Edit'}
-        </button>
+        </Button>
       ) : (
         <span />
       )}
@@ -183,9 +183,7 @@ export function SitePanel({
 
       {onAddEstablishment ? (
         <div className="row">
-          <button type="button" className="primary" onClick={onAddEstablishment}>
-            {addLabel}
-          </button>
+          <Button onClick={onAddEstablishment}>{addLabel}</Button>
         </div>
       ) : null}
     </article>
