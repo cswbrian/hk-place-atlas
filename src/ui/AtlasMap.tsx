@@ -5,6 +5,7 @@ import {
   Map as MapLibreMap,
   Marker,
   NavigationControl,
+  setMaxParallelImageRequests,
   setWorkerUrl,
   type MapMouseEvent,
   type StyleSpecification,
@@ -42,6 +43,8 @@ function syncHistoryMap(
   opacity: number,
   attribution: string,
 ): void {
+  // CSDI MapServer export rate-limits under the default 16-way tile fan-out.
+  setMaxParallelImageRequests(id ? 6 : 16)
   if (!id) {
     if (map.getLayer(HISTORY_LAYER)) map.removeLayer(HISTORY_LAYER)
     if (map.getSource(HISTORY_SOURCE)) map.removeSource(HISTORY_SOURCE)

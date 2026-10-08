@@ -33,8 +33,10 @@ import {
   parseSearchText,
 } from '../src/domain/gis'
 import {
+  HISTORY_MAP_EMPTY_PNG,
   HISTORY_MAP_MAX_Z,
   HISTORY_MAP_MIN_Z,
+  HISTORY_MAP_UPSTREAM_HEADERS,
   historyMapDatasetId,
   historyMapExportUrl,
   xyzToMercatorBbox,
@@ -719,6 +721,34 @@ async function handleGis(request: Request, route: ApiRoute, ctx: ExecutionContex
 }
 
 const HISTORY_MAP_CACHE_SECONDS = 86_400
+const HISTORY_MAP_SOFT_FAIL_CACHE_SECONDS = 30
+const HISTORY_MAP_FETCH_ATTEMPTS = 3
+
+function historyMapSoftFail(): Response {
+  return new Response(HISTORY_MAP_EMPTY_PNG, {
+    status: 200,
+    headers: {
+      'content-type': 'image/png',
+      'cache-control': `public, max-age=${HISTORY_MAP_SOFT_FAIL_CACHE_SECONDS}`,
+    },
+  })
+}
+
+async function fetchHistoryMapUpstream(upstream: string): Promise<Response | null> {
+  for (let attempt = 0; attempt < HISTORY_MAP_FETCH_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 120 * attempt))
+    }
+    try {
+      const upstreamResponse = await fetch(upstream, { headers: HISTORY_MAP_UPSTREAM_HEADERS })
+      const contentType = upstreamResponse.headers.get('content-type') ?? ''
+      if (upstreamResponse.ok && contentType.includes('image')) return upstreamResponse
+    } catch {
+      // retry
+    }
+  }
+  return null
+}
 
 async function handleHistoryMap(
   request: Request,
@@ -737,15 +767,10 @@ async function handleHistoryMap(
   const cacheKey = new Request(new URL(request.url).toString(), { method: 'GET' })
   const hit = await cache.match(cacheKey)
   if (hit) return hit
-  const upstreamResponse = await fetch(upstream, {
-    headers: { 'user-agent': 'hk-atlas/1.0' },
-  })
-  const contentType = upstreamResponse.headers.get('content-type') ?? ''
-  if (!upstreamResponse.ok || !contentType.includes('image')) {
-    return json({ error: 'history map upstream failed' }, 502)
-  }
+  const upstreamResponse = await fetchHistoryMapUpstream(upstream)
+  if (!upstreamResponse) return historyMapSoftFail()
   const headers = new Headers()
-  headers.set('content-type', contentType)
+  headers.set('content-type', upstreamResponse.headers.get('content-type') ?? 'image/png')
   headers.set('cache-control', `public, max-age=${HISTORY_MAP_CACHE_SECONDS}`)
   const response = new Response(upstreamResponse.body, { status: 200, headers })
   ctx.waitUntil(cache.put(cacheKey, response.clone()))

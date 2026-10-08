@@ -68,4 +68,12 @@ describe('historyMap', () => {
     expect(HISTORY_MAP_MIN_Z).toBe(9)
     expect(HISTORY_MAP_MAX_Z).toBe(19)
   })
+
+  it('ships a PNG soft-fail tile', async () => {
+    const { HISTORY_MAP_EMPTY_PNG } = await import('./historyMap')
+    expect(HISTORY_MAP_EMPTY_PNG[0]).toBe(0x89)
+    expect(HISTORY_MAP_EMPTY_PNG[1]).toBe(0x50)
+    expect(HISTORY_MAP_EMPTY_PNG[2]).toBe(0x4e)
+    expect(HISTORY_MAP_EMPTY_PNG[3]).toBe(0x47)
+  })
 })
