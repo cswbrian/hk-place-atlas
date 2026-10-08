@@ -1,3 +1,5 @@
+import { photoMetaIssues } from './photo'
+
 export type PhotoDraftCloseKind = 'close' | 'confirm-discard'
 
 /** How the lightbox should treat Close / Escape for an upload draft. */
@@ -16,4 +18,17 @@ export function photoDraftCanFinish(input: {
   tags: { featureId: string }[] | null | undefined
 }): boolean {
   return (input.tags ?? []).some((tag) => tag.featureId === input.placeFeatureId)
+}
+
+/** After the pin gate: finish should call updatePhoto only when meta validates. */
+export function photoDraftShouldPersistMeta(input: {
+  source?: string | null
+  sourceUrl?: string | null
+  year?: unknown
+  circa?: unknown
+  caption?: string | null
+  photographer?: string | null
+  license?: string | null
+}): boolean {
+  return photoMetaIssues(input).length === 0
 }

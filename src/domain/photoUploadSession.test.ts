@@ -3,6 +3,7 @@ import {
   photoDraftAllowsPaging,
   photoDraftCanFinish,
   photoDraftCloseKind,
+  photoDraftShouldPersistMeta,
 } from './photoUploadSession'
 
 describe('photoDraftCloseKind', () => {
@@ -39,5 +40,34 @@ describe('photoDraftCanFinish', () => {
         tags: [{ featureId: 'place-1' }],
       }),
     ).toBe(true)
+  })
+})
+
+describe('photoDraftShouldPersistMeta', () => {
+  it('persists only when source and https URL are ready', () => {
+    expect(
+      photoDraftShouldPersistMeta({
+        source: '',
+        sourceUrl: '',
+        year: '',
+        circa: false,
+      }),
+    ).toBe(false)
+    expect(
+      photoDraftShouldPersistMeta({
+        source: 'SCMP',
+        sourceUrl: 'https://example.com/a',
+        year: '',
+        circa: false,
+      }),
+    ).toBe(true)
+    expect(
+      photoDraftShouldPersistMeta({
+        source: 'SCMP',
+        sourceUrl: 'https://example.com/a',
+        year: '999',
+        circa: false,
+      }),
+    ).toBe(false)
   })
 })
