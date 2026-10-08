@@ -5,7 +5,7 @@ describe('publicReadCacheSeconds', () => {
   it('caches catalog reads that scan the place table', () => {
     expect(publicReadCacheSeconds({ type: 'search' }, 'GET')).toBe(6 * 60 * 60)
     expect(publicReadCacheSeconds({ type: 'recent' }, 'GET')).toBe(5 * 60)
-    expect(publicReadCacheSeconds({ type: 'counts' }, 'GET')).toBe(5 * 60)
+    expect(publicReadCacheSeconds({ type: 'counts' }, 'GET')).toBe(60 * 60)
     expect(publicReadCacheSeconds({ type: 'sitemap' }, 'GET')).toBe(24 * 60 * 60)
   })
 

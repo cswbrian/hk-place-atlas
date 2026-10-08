@@ -16,6 +16,12 @@ import { SEARCH_FETCH, SEARCH_LIMIT, fts5Query, hanNeedle, mergeSearchIds } from
 import { RECENT_LIMIT, recentItemFromRow, recentListSql } from '../src/domain/recent'
 import { publicReadCacheSeconds, type PublicRead } from './publicCache'
 import {
+  bumpCatalogStat,
+  readCatalogCounts,
+  STAT_PHOTOS,
+  STAT_PLACES,
+} from './catalogStats'
+import {
   CSDI_WFS,
   GIS_CACHE_SECONDS,
   LANDSD_ROOT,
@@ -279,6 +285,7 @@ async function saveFeatureRow(env: Env, feature: ReturnType<typeof featureToRow>
     )
       .bind(...values)
       .run()
+    await bumpCatalogStat(env.DB, STAT_PLACES, 1)
     return
   }
   await env.DB.prepare(
@@ -465,6 +472,7 @@ async function handleDelete(request: Request, env: Env, slug: string): Promise<R
   if (match === 'conflict') return json({ error: 'conflict' }, 412)
   await env.DB.prepare(DELETE_PLACE_TAGS).bind(existing.id).run()
   await env.DB.prepare('DELETE FROM features WHERE id = ?').bind(existing.id).run()
+  await bumpCatalogStat(env.DB, STAT_PLACES, -1)
   await audit(env, session, 'delete', existing.id, existing, null)
   return json({ ok: true })
 }
@@ -514,6 +522,7 @@ async function handleAuditRevert(request: Request, env: Env, id: string): Promis
     if (match === 'conflict') return json({ error: 'conflict' }, 412)
     await env.DB.prepare(DELETE_PLACE_TAGS).bind(existing.id).run()
     await env.DB.prepare('DELETE FROM features WHERE id = ?').bind(existing.id).run()
+    await bumpCatalogStat(env.DB, STAT_PLACES, -1)
     await audit(env, session, 'revert', existing.id, existing, null)
     return json({ deleted: true })
   }
@@ -634,12 +643,7 @@ async function handleRecent(env: Env): Promise<Response> {
 }
 
 async function handleCounts(env: Env): Promise<Response> {
-  const row = await env.DB.prepare(
-    `SELECT
-       (SELECT COUNT(*) FROM features) AS places,
-       (SELECT COUNT(*) FROM photos) AS photos`,
-  ).first<{ places: number; photos: number }>()
-  return json({ places: row?.places ?? 0, photos: row?.photos ?? 0 })
+  return json(await readCatalogCounts(env.DB))
 }
 
 function hk80FromWgs(bbox: Bbox): [number, number, number, number] {
@@ -769,9 +773,11 @@ function photoBucket(env: Env): PhotoBucket | null {
           row.createdBy,
         )
         .run()
+      await bumpCatalogStat(env.DB, STAT_PHOTOS, 1)
     },
     async deleteRow(id) {
       await env.DB.prepare('DELETE FROM photos WHERE id = ?').bind(id).run()
+      await bumpCatalogStat(env.DB, STAT_PHOTOS, -1)
     },
     async inspect(bytes) {
       try {

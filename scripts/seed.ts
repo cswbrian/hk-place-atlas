@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import type { Feature } from '../src/domain/feature.ts'
 import { featureToRow } from '../src/domain/featureQuery.ts'
 import { featuresFromBdbiar, parseBdbiarCsv } from './bdbiar.ts'
+import { RESYNC_CATALOG_STATS_SQL } from '../worker/catalogStats.ts'
 import { featureInsertSql } from './featureSql.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -154,5 +155,6 @@ if (!dbPath) {
 
 const db = new DatabaseSync(dbPath)
 insertFeatures(db, features)
+db.exec(RESYNC_CATALOG_STATS_SQL)
 db.close()
 console.log(`inserted into ${dbPath}`)

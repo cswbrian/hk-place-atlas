@@ -26,5 +26,7 @@ describe('featureInsertSql', () => {
     expect(sql).toContain("O''Brien Building")
     expect(sql).toContain("'奧氏'")
     expect(sql).toContain('114.1')
+    expect(sql).toContain('catalog_stats')
+    expect(sql).toContain("SELECT 'places', COUNT(*) FROM features")
   })
 })

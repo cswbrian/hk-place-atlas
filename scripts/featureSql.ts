@@ -1,5 +1,6 @@
 import type { Feature } from '../src/domain/feature.ts'
 import { featureToRow, type FeatureRow } from '../src/domain/featureQuery.ts'
+import { RESYNC_CATALOG_STATS_SQL } from '../worker/catalogStats.ts'
 
 const BATCH = 40
 
@@ -47,5 +48,5 @@ export function featureInsertSql(features: Feature[]): string {
     const chunk = features.slice(i, i + BATCH).map((feature) => rowValues(featureToRow(feature)))
     lines.push(`INSERT INTO features (${COLUMNS}) VALUES\n${chunk.join(',\n')};`)
   }
-  return `${lines.join('\n')}\n`
+  return `${lines.join('\n')}\n${RESYNC_CATALOG_STATS_SQL}\n`
 }
