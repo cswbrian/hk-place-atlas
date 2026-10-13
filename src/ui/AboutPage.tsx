@@ -1,7 +1,6 @@
 import { CONTACT_EMAIL, GITHUB_URL } from '../domain/legal'
 import { copy, type SiteLocale } from '../domain/locale'
 import { Button } from './Button'
-
 function GitHubMark() {
   return (
     <svg className="about-github-mark" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
@@ -47,6 +46,13 @@ export function AboutPage({
       <p className="about-category">{text.category}</p>
       <p>{text.aboutLead}</p>
       <p>{text.aboutBody}</p>
+      <p>
+        {text.aboutSeedBefore}
+        <a href={text.aboutSeedUrl} target="_blank" rel="noopener noreferrer">
+          {text.aboutSeedLink}
+        </a>
+        {text.aboutSeedAfter}
+      </p>
       <p className="about-can">{text.aboutCan}</p>
       <ul>
         {text.aboutBullets.map((item) => (
@@ -59,6 +65,13 @@ export function AboutPage({
         ) : (
           <Button onClick={onBack}>{text.aboutBack}</Button>
         )}
+      </p>
+      <p className="about-sister">
+        {text.aboutSisterBefore}
+        <a href={text.aboutSisterUrl} target="_blank" rel="noopener noreferrer">
+          {text.aboutSisterLink}
+        </a>
+        {text.aboutSisterAfter}
       </p>
       <footer className="about-footer">
         <a className="about-github" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">

@@ -28,12 +28,22 @@ export const copy = {
     aboutLead: 'We are a community-built urban history map directory.',
     aboutBody:
       'We gather scattered old photos, historical archives, and maps, and archive them by real geographic coordinates. Anyone can browse, and anyone can help complete this map.',
+    aboutSeedBefore: 'The map starts from the Buildings Department’s ',
+    aboutSeedLink: 'Building information and age records',
+    aboutSeedUrl: 'https://data.gov.hk/en-data/dataset/hk-bd-opendata-building-information',
+    aboutSeedAfter:
+      ' dataset on data.gov.hk. It only covers present-day buildings, and some of that data is already out of date. We encourage everyone to update places with the latest information, and to add historical places and old photos if you know of them.',
     aboutCan: 'You can:',
     aboutBullets: [
       'Look up a building’s location, historical background, and old photo records.',
       'Submit coordinates for unlisted former sites, boundary stones, air-raid shelters, and other physical places.',
       'Correct year or location errors in existing entries.',
     ],
+    aboutSisterBefore: 'Curious when a street got its name? Our sister site ',
+    aboutSisterLink: 'HK Street Chronicle',
+    aboutSisterUrl: 'https://street.monsoonclub.co/en',
+    aboutSisterAfter:
+      ' maps the naming years of thousands of Hong Kong streets, traced from Lands Department records and 184 years of government gazettes, so you can follow how the city grew street by street.',
     aboutBack: 'Back to map',
     aboutSignIn: 'Sign in to edit',
     aboutSeoTitle: 'About HONG KONG ATLAS — Hong Kong history map',
@@ -168,12 +178,22 @@ export const copy = {
     aboutLead: '我們是由社群協作的城市歷史地圖目錄。',
     aboutBody:
       '此地圖集將分散於各處的舊相片與歷史檔案，按地理座標整理。歡迎查閱及協助補全。',
+    aboutSeedBefore: '地圖的初始資料來自 data.gov.hk 上屋宇署的公開數據集「',
+    aboutSeedLink: '樓宇資料及樓齡紀錄',
+    aboutSeedUrl: 'https://data.gov.hk/tc-data/dataset/hk-bd-opendata-building-information',
+    aboutSeedAfter:
+      '」，但只涵蓋現存建築物，部分資料亦需要更新。我們鼓勵大家更新地方的最新資料；如你知道已消失的歷史地方或有舊相片，也歡迎補上。',
     aboutCan: '你可以：',
     aboutBullets: [
       '查閱特定建築物的地理位置、歷史背景及舊相片紀錄。',
       '提交尚未收錄的舊址、界石或防空洞等實體坐標。',
       '勘誤現存條目中的年份或定位偏差。',
     ],
+    aboutSisterBefore: '想知道一條街幾時命名？姊妹網站',
+    aboutSisterLink: '香港街道編年',
+    aboutSisterUrl: 'https://street.monsoonclub.co/zh',
+    aboutSisterAfter:
+      '將全港幾千條街道的命名年份放上地圖，資料來自地政總署紀錄及 184 年來的政府憲報，讓你一條街一條街看香港的城市發展。',
     aboutBack: '返回地圖',
     aboutSignIn: '登入以編輯',
     aboutSeoTitle: '關於香港地圖集 — 歷史地圖',

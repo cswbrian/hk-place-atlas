@@ -213,6 +213,10 @@ html[lang^="zh"] .chrome h1 {
   margin: 1.75em 0 0;
 }
 
+.about-page .about-sister {
+  margin-top: 1.75em;
+}
+
 .about-page .about-actions button {
   min-width: 10rem;
 }
