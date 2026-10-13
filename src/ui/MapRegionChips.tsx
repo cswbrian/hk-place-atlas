@@ -12,11 +12,7 @@ type Props = {
 export function MapRegionChips({ locale, region, district, onRegion, onDistrict }: Props) {
   const districts = PLACE_REGIONS.find((item) => item.slug === region)?.districts ?? []
   return (
-    <div
-      className="map-regions"
-      onPointerDown={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-    >
+    <div className="map-regions">
       <div className="chips" role="group" aria-label={placeFilterGroupLabel('region', locale)}>
         {PLACE_REGIONS.map((item) => {
           const pressed = region === item.slug

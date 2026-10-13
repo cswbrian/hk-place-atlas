@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { trackPageview } from './analytics'
+import { trackEvent, trackPageview } from './analytics'
 
 describe('trackPageview', () => {
   afterEach(() => {
@@ -20,5 +20,23 @@ describe('trackPageview', () => {
     vi.stubGlobal('document', { querySelector: () => null })
     vi.stubGlobal('window', {})
     expect(() => trackPageview('/en')).not.toThrow()
+  })
+})
+
+describe('trackEvent', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('calls gtag event', () => {
+    const gtag = vi.fn()
+    vi.stubGlobal('window', { gtag })
+    trackEvent('search', { search_term: 'central' })
+    expect(gtag).toHaveBeenCalledWith('event', 'search', { search_term: 'central' })
+  })
+
+  it('no-ops without gtag', () => {
+    vi.stubGlobal('window', {})
+    expect(() => trackEvent('search')).not.toThrow()
   })
 })

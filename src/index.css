@@ -302,12 +302,162 @@ button .zh {
   min-height: 0;
 }
 
-.map-regions {
+.map-chrome-left {
   position: absolute;
   top: 12px;
   left: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(560px, calc(100% - 72px));
+  max-width: min(560px, calc(100% - 72px));
+  pointer-events: none;
+}
+
+.map-chrome-left > * {
+  pointer-events: auto;
+}
+
+.map-search {
+  position: relative;
+  width: 100%;
+  z-index: 4;
+}
+
+.map-search-field {
+  position: relative;
+}
+
+.map-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']) {
+  width: 100%;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font: 400 12px/1.2 var(--ui);
+}
+
+.map-search-spinner {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border: 1.5px solid var(--muted);
+  border-top-color: var(--foreground);
+  border-radius: 50%;
+  animation: map-search-spin 0.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes map-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.map-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):focus,
+.map-search input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):focus-visible {
+  outline: 1px solid var(--foreground);
+  outline-offset: 0;
+}
+
+.map-search-hits {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  /* Compact rows: ~5 address + 5 place + headings fit without scrolling. */
+  max-height: min(280px, 45vh);
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
+.map-search-empty {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.map-search-section {
+  margin: 0;
+}
+
+.map-search-section + .map-search-section {
+  border-top: 1px solid var(--border);
+}
+
+.map-search-heading {
+  margin: 0;
+  padding: 5px 8px 2px;
+  font: 600 10px/1.2 var(--ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.map-search-hits ul {
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+}
+
+.map-search-hits li button {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  min-height: 0;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 400 12px/1.25 var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-search-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-search-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.map-search-hits li button:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--background));
+}
+
+.map-search-pin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #111;
+  box-shadow: 0 0 0 1px #111;
+}
+
+.map-regions {
+  position: relative;
   z-index: 2;
-  max-width: min(100% - 72px, 560px);
+  max-width: 100%;
 }
 
 .map-regions .chips {
@@ -1832,7 +1982,13 @@ button.photo-thumb:hover {
     min-height: 44px;
   }
 
-  .pin-search button {
+  .pin-search button,
+  .map-search-hits button {
     min-height: 0;
+  }
+
+  .map-chrome-left {
+    width: min(560px, calc(100% - 24px));
+    max-width: min(560px, calc(100% - 24px));
   }
 }

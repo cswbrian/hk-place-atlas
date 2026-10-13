@@ -109,6 +109,8 @@ type Props = {
   catalog: CatalogGeojson
   selectedId: string | null
   focus: Bbox | null
+  /** Search-driven camera move; `key` changes every selection so re-picks always apply. */
+  mapJump: { lng: number; lat: number; key: string; pin: boolean; animate: boolean } | null
   buildings: BuildingSnapshot[]
   lots: LotSnapshot[]
   photos: PhotoPin[]
@@ -149,6 +151,7 @@ export function AtlasMap({
   catalog,
   selectedId,
   focus,
+  mapJump,
   buildings,
   lots,
   photos,
@@ -172,6 +175,7 @@ export function AtlasMap({
   const onPoint = useRef(onPointClick)
   const onPhoto = useRef(onPhotoClick)
   const onViewRef = useRef(onView)
+  const jumpPinMarker = useRef<Marker | null>(null)
   const paintPhotosRef = useRef<() => void>(() => {})
   const applyBasemapRef = useRef<(siteLocale: SiteLocale) => Promise<void>>(async () => {})
   catalogRef.current = catalog
@@ -421,6 +425,8 @@ export function AtlasMap({
     map.on('mouseleave', 'gis-lots-fill', reset)
 
     return () => {
+      jumpPinMarker.current?.remove()
+      jumpPinMarker.current = null
       map.remove()
       mapRef.current = null
     }
@@ -505,8 +511,28 @@ export function AtlasMap({
   useEffect(() => {
     const map = mapRef.current
     if (!map?.loaded() || selectedLng == null || selectedLat == null) return
-    map.easeTo({ center: [selectedLng, selectedLat], zoom: Math.max(map.getZoom(), GIS_ZOOM) })
+    map.jumpTo({ center: [selectedLng, selectedLat], zoom: GIS_ZOOM })
   }, [selectedLng, selectedLat])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    jumpPinMarker.current?.remove()
+    jumpPinMarker.current = null
+    if (!mapJump) return
+    if (mapJump.pin) {
+      const el = document.createElement('div')
+      el.className = 'map-search-pin'
+      jumpPinMarker.current = new Marker({ element: el }).setLngLat([mapJump.lng, mapJump.lat]).addTo(map)
+    }
+    const go = () => {
+      const center: [number, number] = [mapJump.lng, mapJump.lat]
+      if (mapJump.animate) map.flyTo({ center, zoom: GIS_ZOOM, essential: true })
+      else map.jumpTo({ center, zoom: GIS_ZOOM })
+    }
+    if (map.loaded()) go()
+    else map.once('load', go)
+  }, [mapJump])
 
   return <div ref={root} className="map atlas-map" />
 }

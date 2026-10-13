@@ -43,9 +43,11 @@ import {
   DEFAULT_HISTORY_OPACITY,
   type HistoryMapId,
 } from './domain/historyMap'
+import type { AddressHit } from './domain/locationSearch'
 import { AtlasMap } from './ui/AtlasMap'
 import { HistoryMapControl } from './ui/HistoryMapControl'
 import { MapRegionChips } from './ui/MapRegionChips'
+import { MapSearchBox } from './ui/MapSearchBox'
 import { FeatureForm, emptyWikiDraft, wikiDraftFromFeature, wikiDraftToWrite, type WikiDraft } from './ui/FeatureForm'
 import { FeaturePanel } from './ui/FeaturePanel'
 import { gisAroundPoint } from './domain/gis'
@@ -124,6 +126,13 @@ function AtlasApp() {
   const [mapPhotos, setMapPhotos] = useState<PhotoPin[]>([])
   const [historyMapId, setHistoryMapId] = useState<HistoryMapId | null>(null)
   const [historyOpacity, setHistoryOpacity] = useState(DEFAULT_HISTORY_OPACITY)
+  const [mapJump, setMapJump] = useState<{
+    lng: number
+    lat: number
+    key: string
+    pin: boolean
+    animate: boolean
+  } | null>(null)
   const siteRef = useRef<SiteQueryResult | null>(null)
   const bboxRef = useRef<Bbox | null>(null)
   const selectedRef = useRef<Feature | null>(null)
@@ -420,6 +429,7 @@ function AtlasApp() {
       setDraft({ ...draft, lng, lat })
       return
     }
+    setMapJump(null)
     go(canonicalPath(locale, '/'))
     setHitId(nextHitId)
     setSelected(null)
@@ -434,6 +444,37 @@ function AtlasApp() {
       ?? catalog.features.find((feature) => feature.properties.slug === slug)?.properties.kind
       ?? 'establishment'
     go(featurePublicPath(locale, resolved, slug))
+  }
+
+  function selectAddress(hit: AddressHit) {
+    // Clear place selection so the selected-pin camera effect cannot override this jump.
+    setHitId(null)
+    setSelected(null)
+    setEdges([])
+    if (featurePath) go(canonicalPath(locale, '/'))
+    // Defer past the click that closed the dropdown — that click can hit the map and
+    // openPoint() would otherwise clear mapJump in the same gesture.
+    const jump = {
+      lng: hit.lng,
+      lat: hit.lat,
+      key: `a:${hit.id}:${Date.now()}`,
+      pin: true,
+      animate: true,
+    }
+    window.setTimeout(() => setMapJump(jump), 0)
+  }
+
+  function selectPlaceFromSearch(feature: Feature) {
+    if (feature.lng != null && feature.lat != null) {
+      setMapJump({
+        lng: feature.lng,
+        lat: feature.lat,
+        key: `p:${feature.id}:${Date.now()}`,
+        pin: false,
+        animate: false,
+      })
+    }
+    selectSlug(feature.slug, feature.kind)
   }
 
   function openPhoto(featureId: string) {
@@ -553,6 +594,7 @@ function AtlasApp() {
                 catalog={visible}
                 selectedId={selected?.id ?? hitId}
                 focus={mapFocus}
+                mapJump={mapJump}
                 buildings={site?.buildings ?? []}
                 lots={site?.lots ?? []}
                 photos={mapPhotos}
@@ -563,6 +605,28 @@ function AtlasApp() {
                 onPhotoClick={openPhoto}
                 onView={loadMapPhotos}
               />
+              <div
+                className="map-chrome-left"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+              >
+                <MapSearchBox
+                  locale={locale}
+                  onSelectAddress={selectAddress}
+                  onSelectPlace={selectPlaceFromSearch}
+                />
+                <MapRegionChips
+                  locale={locale}
+                  region={mapRegion}
+                  district={mapDistrict}
+                  onRegion={(slug) => {
+                    setMapRegion(slug)
+                    setMapDistrict(null)
+                  }}
+                  onDistrict={setMapDistrict}
+                />
+              </div>
               <HistoryMapControl
                 locale={locale}
                 historyMapId={historyMapId}
@@ -570,16 +634,6 @@ function AtlasApp() {
                 onToggle={(on) => setHistoryMapId(on ? (historyMapId ?? DEFAULT_HISTORY_MAP_ID) : null)}
                 onSelect={setHistoryMapId}
                 onOpacity={setHistoryOpacity}
-              />
-              <MapRegionChips
-                locale={locale}
-                region={mapRegion}
-                district={mapDistrict}
-                onRegion={(slug) => {
-                  setMapRegion(slug)
-                  setMapDistrict(null)
-                }}
-                onDistrict={setMapDistrict}
               />
             </div>
             <aside className="sidebar" id="site-panel">
